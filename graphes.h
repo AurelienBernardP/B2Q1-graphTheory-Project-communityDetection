@@ -17,7 +17,7 @@ struct edge {
 };
 
 struct node {
-   unsigned int myCom;
+   long unsigned int myCom;
    Edge *neighbours;
    Node *next;
 };
@@ -27,7 +27,7 @@ struct community{
    double weightInt;
    Node *member;
    Community *next;
-}
+};
 
 struct graph{
 	long unsigned int nbNode;

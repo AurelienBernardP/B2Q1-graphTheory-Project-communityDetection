@@ -1,124 +1,135 @@
 #include <stdio.h>
-#include "Graphs.h"
+#include "Graphes.h"
 
-void initGraph(Graph *g)
-{
+static void initGraph(Graph *g);
+static int addCommunity(Graph *g);
+static int addEdge(Graph *g, long unsigned int a, long unsigned int b, double weight);
+
+static void initGraph(Graph *g){
 	g->nbNode=0;
 	g->nbEdge=0;
 	g->weightTot=0.0;
-	g->start=NULL;
     g->community=NULL;
 }
 
-int addNode(Graph *g){
+static int addCommunity(Graph *g){
 	Node *node;
-	//g->maxS++;
+	Community* community;
+	community=(Community *) malloc(sizeof(Community));
+	if (community == NULL){
+		printf("Erreur! Memoire insuffisante pour creer une community\n");
+		return -1;
+	}
 	node=(Node *) malloc(sizeof(Node));
 	if (node == NULL){
 		printf("Erreur! Memoire insuffisante pour creer un sommet\n");
 		return -1;
 	}
-	node->prevModularity = 0;
-	//node->community = NULL;
+	
+	
+	g->nbNode++;
+	community.label = g->nbNode;
+	community.weightInt = 0.0;
+	node->myCom = g->nbNode;
 	node->neighbours=NULL;
 	node->next=NULL;
-	if (g->nbNode == 0)
-		g->start=node;
-	else{
-		node->next = g->start;
-		g->start = node;
-	}
-	g->nbNode++;
+	community->member=node;
+	community->next=g->com->next;
+	g->community = community;
 	return 0;
 }
 
-int addEdge(Graph *g, long unsigned int a, long unsigned int b, double weight){
-	Node *pnode, *pnode2;
-	Edge *pEdge, *prev;
-	pnode=g->start;
+static int addEdge(Graph *g, long unsigned int a, long unsigned int b, double weight){
+	Community *pCom, *pCom2;
+	Edge *pEdge;
+	pCom=g->community;
 
-	/* on parcourt les sommets jusqu'a trouver a */
-	while (pnode != NULL && g->nbNode-a>0){
-		pnode=pnode->next;
-		a++;
-
-	}
-	if (pnode == NULL){
+	/* on parcourt les community jusqu'a trouver a */
+	while (pCom != NULL && pCom.label != a)
+		pCom=pCom->next;
+	if (pCom == NULL){
 		printf("Erreur! Creation d'un arc dont l'origine n'existe pas\n");
 		return -1;
 	}
 	/* on parcourt les sommets pour trouver b */
-	pnode2=g->start;
-	while (pnode2 != NULL && g->nbNode-b>0){
-		pnode2=pnode2->suivant;
-		b++;
-	}
+	pCom2=g->community;
+	while (pCom2 != NULL && pCom2.label != b) //Peut etre probleme is pCom == NULL car pCom.label n'existe pas et donc peut pas y avoir accès
+		pCom2=pCom2->next;
 	if (pnode2 == NULL){
 		printf("Erreur! Creation d'un arc dont l'extremite n'existe pas\n");
 		return -2;
 	}
 	pEdge=(Edge *) malloc(sizeof(Edge));
 	if (pEdge == NULL){
-		printf("Erreur! Memoire insuffisante pour creer un sommet\n");
+		printf("Erreur! Memoire insuffisante pour creer un arc\n");
 		return -3;
 	}
-	pEdge->next=pnode->neighbours;
-	pnode->neighbours=pEdge
-	pEdge->node=pnode2;
-	pEdge->weight=weight;
+	
+	pEdge.weight = weight;
+	pEdge->dest = pCom2->member;
+	pEdge->next = pCom->member->neighbours;
+	pCom->member->neighbours = pEdge;
+	pCom.weightInt += weight;
 	g->nbEdge++;
 	g->weightTot += weight;
-	//Doit mettre à jour community weightInt
 	return 0;
 }
 
 
-void supprimerGraph(Graph *g)
-{
-	Node *pNode,*tmpNode;
+void deleteGraph(Graph *g){
+	Community *pCom,*tmpCom;
+	Node* pNode, *tmpNode;
 	Edge *pEdge,*tmpEdge;
-	pnode=g->start;
-	while (pnode != NULL){
-		pEdge=pNode->neighbours;
-		while(pEdge != NULL){
-			tmpEdge=pEdge;
-			pEdge=pEdge->suivant;
-			//free(tempEdge->node); inutile normalement car on va free par apres
-			free(tmpEdge);
+	pCom=g->community;
+	while (pCom != NULL){
+	    pNode=pCom->member;
+	    while(pNode != NULL){
+		    pEdge=pNode->neighbours;
+		    while(pEdge != NULL){
+			    tmpEdge=pEdge;
+			    pEdge=pEdge->next;
+			    free(tmpEdge);
+			}
+		    tmpNode = pNode;
+		    pNode = pNode->next;
+		    free(tmpNode);
 		}
-		tmpNode=pNode;
-		pNode=pNode->suivant;
-		free(tmpNode);
+		tmpCom=pCom;
+		pCom=pCom->next;
+		free(tmpCom);
 	}
-
-	////////////////////////////////////////supprimer community
 	initGraph(g);
 }
 
 void afficherGraph(Graph *g){
+	Community *pCom;
 	Node *pNode;
 	Edge *pEdge;
-	if(g->start == NULL){
+	if(g->community == NULL){
 		printf("Graphe vide\n");
 		return
 	}
 	printf("Nombre Sommets: %lu\n Nombre Arc: %lu\n Poinds total=%d\n", g->nbNode, g->nbEdge, g->weightTot);
-	pNode=g->start;
-	do{
+	pCom=g->community;
+	while(pCom != NULL){
 		printf("\n");
-		printf("Sommet de label: %lu\n", i);
-		if (pNode->neighbours == NULL)
-			printf(" -> ce sommet n'a aucun arc sortant\n ");
-		else{
-			pEdge=pNode->neighbours;
-			do{
-				printf(" -> arc de %u vers %u avec l'info. %lf \n", pNode->community->label,pEdge->node->community->label, pEdge->weight);
-				pEdge=pEdge->suivant;
-			}while (pEdge != NULL);
+		printf("Communauté label: %lu\n Poids intérieur: %lf\n", pCom.label, pCom.weightInt);
+		pNode=pCom->member
+		while(pNode != NULL){
+		    if (pNode->neighbours == NULL)
+			    printf(" -> ce sommet n'a aucun arc sortant\n ");
+		    else{
+		    	pEdge=pNode->neighbours;
+		    	while(pEdge != NULL){
+		    		printf(" -> arc de %lu vers %lu avec l'info. %lf \n", pNode.myCom,pEdge->dest.myCom, pEdge->weight);
+			    	pEdge=pEdge->suivant;
+			    }
+		    }
+		    printf("\n");
+		    pNode=pNode->next;
 		}
-		printf("\n");
-		pnode=pnode->suivant;
-	}while (pnode != NULL);
+	pCom=pCom->next;
+	}
 }
 
 int lireFichier(char *filename, Graph *g)
@@ -180,7 +191,7 @@ int lireFichier(char *filename, Graph *g)
 			}
 			if (nbEdge != nbS1){ /* pas le bon nombre de champs sur line */
 				printf("Erreur à la line %d !\n",nbline);
-				supprimerGraph(g);
+				deleteGraph(g);
 				return -1; /* pas le bon nombre de champs */
 			}
 		}

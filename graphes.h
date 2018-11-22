@@ -5,34 +5,27 @@
 #define MAX 10000
 
 typedef struct community Community;
-typedef struct member Member;
 typedef struct edge Edge;
 typedef struct node Node;
 typedef struct graph Graph;
 
 
-struct member{
-   Node *node;
-   Member* next;
-}
-
 struct edge {
    double weight;
-   Node *node;
+   Node *dest;
    Edge *next;
 };
 
 struct node {
-   double prevModularity;
+   unsigned int myCom;
    Edge *neighbours;
-   Community *community;
    Node *next;
 };
 
 struct community{
-   unsigned int label;
+   long unsigned int label;
    double weightInt;
-   Member *member;
+   Node *member;
    Community *next;
 }
 
@@ -40,21 +33,8 @@ struct graph{
 	long unsigned int nbNode;
 	long unsigned int nbEdge;
 	double weightTot;
-	Node *start;
 	Community *community;
 };
-
-void initGraph(Graph *);
-
-int addNode(Graph *);
-
-int addEdge(Graph *, long unsigned int a, long unsigned int b, double weight);
-
-int changeCommunity(Graph*);
-
-int deleteNode(Graph *, int label);
-
-int deleteEdge(Graph *, long unsigned int a, long unsigned int b);
 
 void deleteGraph(Graph *);
 

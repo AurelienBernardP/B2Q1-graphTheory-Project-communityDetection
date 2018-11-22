@@ -26,7 +26,7 @@ static int addCommunity(Graph *g){
 		printf("Erreur! Memoire insuffisante pour creer un sommet\n");
 		return -1;
 	}
-	
+
 	g->nbNode++;
 	community->label = g->nbNode;
 	community->weightInt = 0.0;
@@ -70,7 +70,7 @@ static int addEdge(Graph *g, long unsigned int a, long unsigned int b, double we
 		printf("Erreur! Memoire insuffisante pour creer un arc\n");
 		return -3;
 	}
-	
+
 	pEdge->weight = weight;
 	pEdge->dest = pCom2->member;
 	pEdge->next = pCom->member->neighbours;
@@ -81,6 +81,63 @@ static int addEdge(Graph *g, long unsigned int a, long unsigned int b, double we
 	return 0;
 }
 
+
+//Rajouter weight tot dans sommet node?
+//PRENDRE COMPTE DE LA MODIFICATION DE POIDS
+//Comment remove le membre de la communauté dans supprimer celui-ci
+int changeCommunity(Graph *g, Node* node, Community* community){
+	if(node->myCom == community->label)
+		return 0;
+
+	Community* pCom, *prevCom;
+	Node* pNode, *pNode2;
+
+	//Cherche la communauté du membre à déplacer
+	prevCom = g->community;
+	pCom = g->community;
+	while(pCom->label != node->myCom){
+		prevCom = pCom;
+		pCom=pCom->next;
+	}
+
+
+
+
+
+
+
+
+
+
+
+	if(node->next == NULL){
+		//Si aucun membre dans la communauté, on la supprime entierement
+		if(pCom->member == node){
+			prevCom->next = pCom->next;
+			free(pCom);
+		}else{
+			free(node);
+			node=NULL;
+			return 0;
+		}
+	}else{
+		//On supprime le membre
+		pNode = node->next;
+		free(node);
+
+		// on relie les 2 parties séparer par le membre supprimé
+		pNode2 = pCom->member;
+		while(pNode2->next != NULL)
+			pNode2 = pNode2->next;
+		pNode2->next=pNode2;
+	}
+
+	//Ajout du membre dans la communauté
+	node->myCom = community->label;
+	node->next = community->member;
+	community->member = node;
+	return 0;
+}
 
 void deleteGraph(Graph *g){
 	Community *pCom,*tmpCom;
@@ -127,7 +184,7 @@ void showGraph(Graph *g){
 		    else{
 		    	pEdge=pNode->neighbours;
 		    	while(pEdge != NULL){
-		    		printf(" -> arc de %lu vers %lu avec l'info. %lf \n", pNode->myCom,pEdge->dest->myCom-1, pEdge->weight);
+		    		printf(" -> arc de %lu vers %lu avec l'info. %lf \n", pNode->myCom,pEdge->dest->myCom, pEdge->weight);
 			    	pEdge=pEdge->next;
 			    }
 		    }
@@ -138,14 +195,14 @@ void showGraph(Graph *g){
 	}
 }
 
-int readFile(char *filename, Graph *g)
-{
+int readFile(char *filename, Graph *g){
 	FILE *fp;
 	char line[MAX+1]; //Max == 10000 caracteres par ligne
 	int weight,i,j,nbS1,nbLine,node,nbEdge,createEdge;
 
 	initGraph(g);
 	fp=fopen(filename,"r"); /* ouvre un fichier en lecture */
+
 	nbLine=0; /* compte les lines du fichier */
 	node=0; /* label du sommet en cours */
 	nbS1=0; /* compte les sommets de la 1ere line */
@@ -164,7 +221,7 @@ int readFile(char *filename, Graph *g)
 						i++;
 				}
 				for (j=1; j<=nbS1; j++){
-					addCommunity(g);   
+					addCommunity(g);
 				}
 				i=0; /* on relit la 1ere line */
 			}
@@ -193,7 +250,7 @@ int readFile(char *filename, Graph *g)
 				if (line[i] == ',')
 					i++;
 				nbEdge++;
-				if (nbEdge<=nbS1 && createEdge==1)			
+				if (nbEdge<=nbS1 && createEdge==1)
 					addEdge(g,node,nbEdge,weight); /* line pas trop longue */
 			}
 			if (nbEdge != nbS1){ /* pas le bon nombre de champs sur line */
@@ -208,13 +265,27 @@ int readFile(char *filename, Graph *g)
 }
 
 int main(int argc, char *argv[]){
-    char filename[10]="graph.txt";
+    char filename[10]="graps.txt";
     Graph *g = malloc(sizeof(Graph));
     if(g==NULL)
         return -1;
     readFile(filename,g);
     showGraph(g);
-    deleteGraph(g);
+
+	Node* pNode;
+	Community* pCom = g->community;
+
+	//Rajouter le 3ieme point c-a-d 1 dans la communauté 2
+	while(pCom->label != 2)
+		pCom = pCom->next;
+	printf("pCom %lu\n", pCom->label);
+	pNode = g->community->next->next->member;
+	printf("pNode %lu\n", pNode->myCom);
+
+	changeCommunity(g,pNode ,pCom);
+	showGraph(g);
+    //deleteGraph(g);
+	//free(g);
     return 0;
 }
 

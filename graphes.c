@@ -32,7 +32,9 @@ static int addCommunity(Graph *g){
 	community->weightInt = 0.0;
 	node->myCom = g->nbNode;
 	node->neighbours=NULL;
+	node->weightNode=0.0;
 	node->next=NULL;
+	node->previous = NULL;
 	community->member=node;
 	if(g->community == NULL){
 	    community->next=NULL;
@@ -42,6 +44,7 @@ static int addCommunity(Graph *g){
 	return 0;
 }
 
+//Fonctionne qu'a l'init
 static int addEdge(Graph *g, long unsigned int a, long unsigned int b, double weight){
 	Community *pCom, *pCom2;
 	Edge *pEdge;
@@ -75,6 +78,7 @@ static int addEdge(Graph *g, long unsigned int a, long unsigned int b, double we
 	pEdge->dest = pCom2->member;
 	pEdge->next = pCom->member->neighbours;
 	pCom->member->neighbours = pEdge;
+	pCom->member->weightNode += weight;
 	pCom->weightInt += weight;
 	g->nbEdge++;
 	g->weightTot += weight;
@@ -90,7 +94,8 @@ int changeCommunity(Graph *g, Node* node, Community* community){
 		return 0;
 
 	Community* pCom, *prevCom;
-	Node* pNode, *pNode2;
+	Node* pNode;
+	unsigned i=0,nbMember=0;
 
 	//Cherche la communauté du membre à déplacer
 	prevCom = g->community;
@@ -99,43 +104,48 @@ int changeCommunity(Graph *g, Node* node, Community* community){
 		prevCom = pCom;
 		pCom=pCom->next;
 	}
-
-
-
-
-
-
-
-
-
-
-
-	if(node->next == NULL){
-		//Si aucun membre dans la communauté, on la supprime entierement
-		if(pCom->member == node){
-			prevCom->next = pCom->next;
-			free(pCom);
-		}else{
-			free(node);
-			node=NULL;
-			return 0;
-		}
-	}else{
-		//On supprime le membre
-		pNode = node->next;
-		free(node);
-
-		// on relie les 2 parties séparer par le membre supprimé
-		pNode2 = pCom->member;
-		while(pNode2->next != NULL)
-			pNode2 = pNode2->next;
-		pNode2->next=pNode2;
+	//Si on remove le champ previous de node alors on doit faire ça
+	/*pNode = node->next;
+	while(pNode != NULL){
+		pNode = pNode->next;
+		i++;
 	}
+
+	pNode = pCom->member;
+	while(pNode != NULL){
+		pNode = pNode->next;
+		nbMember++;
+	}
+
+	pNode = pCom->member;
+	while(nbMember-i-1>1){
+		pNode = pNode->next;
+		nbMember--;
+	}
+
+	pNode->next = node->next;*/
+
+	//Si le premier elem ou pas
+	if(node->previous == NULL)
+		pCom->member = node->next;
+	else
+		node->previous->next = node->next;
+
+	//Si la communauté est vide alors on la supprime
+	pCom->weightInt -= node->weightNode;
+	if(pCom->weightInt == 0){
+		prevCom->next = pCom->next;
+		free(pCom);
+	}
+
 
 	//Ajout du membre dans la communauté
 	node->myCom = community->label;
 	node->next = community->member;
+	node->previous = NULL;
+	community->member->previous = node;
 	community->member = node;
+	community->weightInt += node->weightNode;
 	return 0;
 }
 
@@ -176,15 +186,16 @@ void showGraph(Graph *g){
 	pCom=g->community;
 	while(pCom != NULL){
 		printf("\n");
-		printf("Communauté label: %lu\n Poids intérieur: %lf\n", pCom->label, pCom->weightInt);
+		printf("Communauté label: %lu\n Poids intérieur: %lf\n", pCom->label-1, pCom->weightInt);
 		pNode=pCom->member;
 		while(pNode != NULL){
+			printf("Le sommet a un poids total de %lf\n", pNode->weightNode);
 		    if (pNode->neighbours == NULL)
 			    printf(" -> ce sommet n'a aucun arc sortant\n ");
 		    else{
 		    	pEdge=pNode->neighbours;
 		    	while(pEdge != NULL){
-		    		printf(" -> arc de %lu vers %lu avec l'info. %lf \n", pNode->myCom,pEdge->dest->myCom, pEdge->weight);
+		    		printf(" -> arc de %lu vers %lu avec l'info. %lf \n", pNode->myCom-1,pEdge->dest->myCom-1, pEdge->weight);
 			    	pEdge=pEdge->next;
 			    }
 		    }
@@ -265,7 +276,7 @@ int readFile(char *filename, Graph *g){
 }
 
 int main(int argc, char *argv[]){
-    char filename[10]="graps.txt";
+    char filename[10]="graph.txt";
     Graph *g = malloc(sizeof(Graph));
     if(g==NULL)
         return -1;
@@ -275,191 +286,39 @@ int main(int argc, char *argv[]){
 	Node* pNode;
 	Community* pCom = g->community;
 
-	//Rajouter le 3ieme point c-a-d 1 dans la communauté 2
-	while(pCom->label != 2)
+	while(pCom->label-1 != 2)
 		pCom = pCom->next;
-	printf("pCom %lu\n", pCom->label);
-	pNode = g->community->next->next->member;
-	printf("pNode %lu\n", pNode->myCom);
+	pNode = g->community->next->member;
+	printf("De pNode: %lu à pCom: %lu\n", pNode->myCom-1, pCom->label-1);
 
 	changeCommunity(g,pNode ,pCom);
 	showGraph(g);
-    //deleteGraph(g);
-	//free(g);
+
+
+//WHAT THE FUCK IS FUCKING HAPPENING JESUS FUCKING CHRIST
+	/*pCom = g->community;
+	while(pCom->label-1 != 2)
+		pCom = pCom->next;
+	pNode = g->community->member;
+	printf("De pNode: %lu à pCom: %lu\n", pNode->myCom-1, pCom->label-1);
+	changeCommunity(g,pNode ,pCom);
+	showGraph(g);
+
+	pCom = g->community;
+	while(pCom->label-1 != 2)
+		pCom = pCom->next;
+	pNode = pCom->member->next;
+	pCom = g->community;
+	while(pCom->label-1 != 3)
+		pCom = pCom->next;
+	pNode = g->community->next->member;
+
+	printf("De pNode: %lu à pCom: %lu\n", pNode->myCom, pCom->label);
+
+	changeCommunity(g,pNode ,pCom);
+
+	showGraph(g);*/
+    deleteGraph(g);
+	free(g);
     return 0;
 }
-
-/*int supprimerArc(Graph *g, int a, int b){
-	Node *pnode;
-	Edge *pEdge, *precedent_adj;
-	int flag_premier_arc;
-	if (g->premierSommet == NULL)
-		{
-			printf("Erreur! Graph vide, suppression impossible\n");
-			return -1;
-		}
-	else
-		{
-			pnode=g->premierSommet;
-			while (pnode != NULL)
-				{
-					if (pnode->label == a) break;
-					else pnode=pnode->suivant;
-				}
-			if (pnode == NULL)
-				{
-					printf("Erreur! L'extremite de l'arc a supprimer n'existe pas\n");
-					return -1;
-				}
-			else
-				{
-					pEdge=pnode->adj;
-					flag_premier_arc=1;
-					while (pEdge !=NULL)
-						{
-							if (pEdge->dest == b) break;
-							else
-								{
-									flag_premier_arc=0;
-									precedent_adj=pEdge;
-									pEdge=pEdge->suivant;
-								}
-						}
-					if (pEdge != NULL)
-						{
-							if (flag_premier_arc == 1) pnode->adj=pEdge->suivant;
-							else precedent_adj->suivant=pEdge->suivant;
-							free(pEdge);
-							g->nbA--;
-						}
-					else
-						{
-							printf("Erreur! L'extremite de l'arc a supprimer n'existe pas\n");
-							return -1;
-						}
-				}
-			return 0;
-		}
-}
-*/
-
-/* la liste d'adjacence est non vide, on la parcourt pour voir si b s'y trouve
-if(pEdge->dest > b){
-	pEdge=(Edge *) malloc(sizeof(Edge));
-	if (pEdge == NULL){
-		printf("Erreur! Memoire insuffisante pour creer un sommet\n");
-		return -3;
-	}else{
-		pEdge->suivant=pnode->adj;
-		pnode->adj=pEdge;
-	}
-}else{
-	while (pEdge != NULL){
-		if (pEdge->dest == b){
-				pEdge->info=info;
-				break;
-		} /* l'arc existe, update info
-		if (pEdge->dest > b){
-			pEdge=NULL;
-			break;
-		} /* on depasse b sans le trouver
-		precedent=pEdge;
-		pEdge=pEdge->suivant;
-	}
-	if (pEdge == NULL){ /* l'arc n'existe pas, il faut le creer
-		pEdge=(Edge *) malloc(sizeof(Edge));
-		if (pEdge == NULL){
-			printf("Erreur! Memoire insuffisante pour creer un sommet\n");
-			return -3;
-		}else
-			if (precedent->suivant==NULL){ /* element ajouter a la fin
-				precedent->suivant=pEdge;
-				pEdge->suivant=NULL;
-			}
-			else{ /* element ajouter "au milieu" pour garder ordre
-				pEdge->suivant=precedent->suivant;
-				precedent->suivant=pEdge;
-			}
-	}*/
-
-
-
-
-
-
-
-	/*int supprimerSommet(Graph *g, int a){
-		Node *pnode, *precedent;
-		Edge *pEdge, *suivant, *precedent_adj;
-		int flag_premier_sommet, flag_premier_arc;
-		if (g->premierSommet == NULL)
-			{
-				printf("Erreur! Graph vide, suppression impossible\n");
-				return -1;
-			}
-		else
-			{
-				pnode=g->premierSommet;
-				flag_premier_sommet=1;
-				while (pnode != NULL)
-					{
-						if (pnode->label == a) break;
-						else
-							{
-								flag_premier_sommet=0;
-								precedent=pnode;
-								pnode=pnode->suivant;
-							}
-					}
-				if (pnode == NULL)
-					{
-						printf("Erreur! Le sommet a supprimer n'existe pas\n");
-						return -1;
-					}
-				else
-					{
-						if (pnode->suivant == NULL) g->dernierSommet=precedent;
-
-						if (flag_premier_sommet == 1) g->premierSommet=pnode->suivant;
-						else precedent->suivant=pnode->suivant;
-						pEdge=pnode->adj;
-						free(pnode);
-						g->nbS--;
-						while (pEdge != NULL)
-							{
-								suivant=pEdge->suivant;
-								free(pEdge);
-								g->nbA--;
-								pEdge=suivant;
-							}
-					}
-
-				/* il faut aussi supprimer les arcs ayant le sommet a supprimer comme extremite
-				pnode=g->premierSommet;
-				while (pnode != NULL)
-					{
-						pEdge=pnode->adj;
-						flag_premier_arc=1;
-						while (pEdge !=NULL)
-							{
-								if (pEdge->dest == a) break;
-								else
-									{
-										flag_premier_arc=0;
-										precedent_adj=pEdge;
-										pEdge=pEdge->suivant;
-									}
-							}
-						if (pEdge != NULL)
-							{
-								if (flag_premier_arc == 1) pnode->adj=pEdge->suivant;
-								else precedent_adj->suivant=pEdge->suivant;
-								free(pEdge);
-								g->nbA--;
-							}
-						pnode=pnode->suivant;
-					}
-				return 0;
-			}
-	}
-	*/

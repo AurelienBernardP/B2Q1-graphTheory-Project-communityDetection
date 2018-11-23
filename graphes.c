@@ -95,6 +95,7 @@ int changeCommunity(Graph *g, Node* node, Community* community){
 
 	Community* pCom, *prevCom;
 	Node* pNode;
+	unsigned is_first=1;
 	unsigned i=0,nbMember=0;
 
 	//Cherche la communauté du membre à déplacer
@@ -103,6 +104,7 @@ int changeCommunity(Graph *g, Node* node, Community* community){
 	while(pCom->label != node->myCom){
 		prevCom = pCom;
 		pCom=pCom->next;
+		is_first=0;
 	}
 	//Si on remove le champ previous de node alors on doit faire ça
 	/*pNode = node->next;
@@ -130,14 +132,15 @@ int changeCommunity(Graph *g, Node* node, Community* community){
 		pCom->member = node->next;
 	else
 		node->previous->next = node->next;
-
 	//Si la communauté est vide alors on la supprime
 	pCom->weightInt -= node->weightNode;
 	if(pCom->weightInt == 0){
-		prevCom->next = pCom->next;
+	    if(is_first)
+	        g->community = pCom->next;
+	    else
+		    prevCom->next = pCom->next;
 		free(pCom);
 	}
-
 
 	//Ajout du membre dans la communauté
 	node->myCom = community->label;
@@ -284,8 +287,10 @@ int main(int argc, char *argv[]){
     showGraph(g);
 
 	Node* pNode;
+	
+	
+    //Ajout du sommet 14 dans communauté 2
 	Community* pCom = g->community;
-
 	while(pCom->label-1 != 2)
 		pCom = pCom->next;
 	pNode = g->community->next->member;
@@ -294,12 +299,24 @@ int main(int argc, char *argv[]){
 	changeCommunity(g,pNode ,pCom);
 	showGraph(g);
 
-
-//WHAT THE FUCK IS FUCKING HAPPENING JESUS FUCKING CHRIST
-	/*pCom = g->community;
+    //Ajout du sommet 15 dans communauté 2
+    pCom = g->community;
 	while(pCom->label-1 != 2)
 		pCom = pCom->next;
 	pNode = g->community->member;
+	printf("De pNode: %lu à pCom: %lu\n", pNode->myCom-1, pCom->label-1);
+	changeCommunity(g,pNode ,pCom);
+	showGraph(g);
+
+    //Ajout du sommet 0 dans communauté 2
+    pCom = g->community;
+	while(pCom->label-1 != 0)
+		pCom = pCom->next;
+	pNode = pCom->member;
+	
+	pCom = g->community;
+	while(pCom->label-1 != 2)
+		pCom = pCom->next;
 	printf("De pNode: %lu à pCom: %lu\n", pNode->myCom-1, pCom->label-1);
 	changeCommunity(g,pNode ,pCom);
 	showGraph(g);
@@ -311,13 +328,12 @@ int main(int argc, char *argv[]){
 	pCom = g->community;
 	while(pCom->label-1 != 3)
 		pCom = pCom->next;
-	pNode = g->community->next->member;
 
-	printf("De pNode: %lu à pCom: %lu\n", pNode->myCom, pCom->label);
+	printf("De pNode: %lu à pCom: %lu\n", pNode->myCom-1, pCom->label-1);
 
 	changeCommunity(g,pNode ,pCom);
 
-	showGraph(g);*/
+	showGraph(g);
     deleteGraph(g);
 	free(g);
     return 0;

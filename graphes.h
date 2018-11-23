@@ -18,7 +18,9 @@ struct edge {
 
 struct node {
    long unsigned int myCom;
+   double weightNode;
    Edge *neighbours;
+   Node *previous;
    Node *next;
 };
 

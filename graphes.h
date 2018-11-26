@@ -16,6 +16,7 @@ struct edge {
    Edge *next;
 };
 
+
 struct node {
    //De type Community car quand le gain est supérieur on Peut
    //Transferer le membre plus rapidement à la communauté de son voisin

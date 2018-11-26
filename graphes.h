@@ -45,8 +45,20 @@ struct community{
    //matrice.   Pas pue comparer member à null quand on lui enleve son seul
    //membre. Pourtant je free bien son unique membre mais il ne voit pas
    //com->member == NULL à méditer...
+   //Il est aussi tres utile pour le calcul du gain de modularité
+   double weightTot;
+   //Tres utile car sans ce champs, pour une communauté on va devoir tjrs
+   //calculer la somme des arcs incidents à cette communauté pour chaque
+   //voisin de chaque membre. Nous permet d'éviter bcp de boucle
    double weightInt;
    Node *member;
+
+   //Permet de supprimer une communauté sans devoir passer par toutes les com
+   //Etant donné que les membres vont bcp changer de communauté, on aura
+   //bcp d'appels à changeCommunity donc on doit éviter de devoir à chaque
+   //fois trouver une communauté
+   //A chaque pass, le nombre de communauté diminue bcp
+   Community *previous;
    Community *next;
 };
 
@@ -58,10 +70,27 @@ struct graph{
 	Community *community;
 };
 
+
+/*
+Ajout du membre $node$ dans la communauté $community$.
+Apres l'ajout, si l'ancienne communauté de $node$ est vide, on la supprime
+
+input: g : un graphe initialisé
+	  node: un membre d'une communauté
+	  community: la nouvelle communauté du membre $node$
+
+return: 0: si succes
+		-1: si non respect des préconditions
+*/
+int changeCommunity(Graph *g, Node* node, Community* community);
+
+//Supprime le graphe en entier
 void deleteGraph(Graph *);
 
+//Affiche un graphe
 void showGraph(Graph *);
 
+//Cree un graphe à partir d'un fichier.
 int readFile(char *filename, Graph *);
 
 #endif

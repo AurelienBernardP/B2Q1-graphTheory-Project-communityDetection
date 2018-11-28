@@ -403,6 +403,8 @@ int readFile(char *filename, Graph *g){
 }
 
 long double gainModularity(Graph* g, Node* node, Community* com){
+
+    printf("from %lu to %lu\n",node->myCom->label-1 ,com->label-1);
     long double weightTot;
     long double comWeightInt, comWeightExt;
     long double nodeWeight, nodeWeightCom;
@@ -422,14 +424,16 @@ long double gainModularity(Graph* g, Node* node, Community* com){
     //sum of the weights of all the links in the network
     weightTot = g->weightTot;
 
-    long double t1 = (comWeightInt + nodeWeightCom)/(2*weightTot);
-    long double t2 = (comWeightExt + nodeWeight)/(2*weightTot);
+    printf("sum_in = %Lf, sum_tot = %Lf, k_in = %Lf, k_i = %Lf, m = %Lf\n",comWeightInt,comWeightExt,nodeWeightCom,nodeWeight,weightTot);
+    long double t1 = (comWeightInt + nodeWeightCom)/(weightTot);
+    long double t2 = (comWeightExt + nodeWeight)/(weightTot);
     long double t3 = t1 - (t2 * t2);
 
-    long double s1 = (comWeightExt/(2*weightTot))*(comWeightExt/(2*weightTot));
-    long double s2 = (nodeWeight/(2*weightTot))*(nodeWeight/(2*weightTot));
-    long double s3 = (comWeightInt/(2*weightTot))-s1-s2;
+    long double s1 = (comWeightExt/(weightTot))*(comWeightExt/(weightTot));
+    long double s2 = (nodeWeight/(weightTot))*(nodeWeight/(weightTot));
+    long double s3 = (comWeightInt/(weightTot))-s1-s2;
 
+    printf("q = %LF \n",t3-s3);
     return (t3 - s3);
 }
 
@@ -478,9 +482,9 @@ void stepOne(Graph* g){
 			//suivante. pComNext nous permet d'éviter  ce cas
 			pComNext = pCom->next;
 			if(has_imp && pMember->myCom->label != pNewCom->label){
-				printf("********************************From %lu to %lu because %Lf\n \n \n", pMember->myCom->label-1, pNewCom->label-1,maxQ);
+				printf("**************************From %lu to %lu because %Lf\n", pMember->myCom->label-1, pNewCom->label-1,maxQ);
 				changeCommunity(g, pMember, pNewCom);
-				showGraph(g);
+				//showGraph(g);
 				i = 0; //on doit refaire un tour
 			}
 			pMember = pMemberNext;

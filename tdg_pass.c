@@ -1,7 +1,16 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include"graphes.h"
-
+static void freeAdjacenceMatrix(Graph* g, double** adjacenceMatrix){
+    if(!g || !AdjacenceMatrix){return;}
+        
+    for(size_t i = 0; i<g->nbNodes; i++){
+        free(adjacenceMatrix[i]);
+    }
+    free(adjacenceMatrix);
+        
+    return;    
+}
 static double** makeAdjacenceMatrix(Graph* g){
     if(!g){return NULL;}
     
@@ -13,6 +22,7 @@ static double** makeAdjacenceMatrix(Graph* g){
     for(size_t i = 0; i < g->nbNodes; i++){
         adjMatWithCommunity[i] = calloc(g->nbNodes + 1, double);//+1 because we are adding an extra column for the node's community.
         if(!adjMatWithCommunity[i]){
+            free(adjMatWithCommunity);
             return NULL;
         }
     }
@@ -74,8 +84,10 @@ static int makeTrace(Graph* g){
 
     int errorCode = printGraphWithCommunities(g, adjMatWithCommunity);
     if(errorCode){
+        freeAdjacenceMatrix(g, adjMatWithCommunity);
         return -1;
     }
+    freeAdjacenceMatrix(g, adjMatWithCommunity);
 
     return 0;
 }

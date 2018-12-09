@@ -22,6 +22,7 @@ struct node {
    //Transferer le membre plus rapidement à la communauté de son voisin
    //(évite de parcourir toutes les communauté jusqu'à trouver la bonne)
    Community *myCom;
+   unsigned long label;//added field for pass
 
    //Evite de parcourir tous ses arcs pour trouver son poids.
    //Il suffit de le calculer au moment où on rajoute un arc à ce membre
@@ -67,6 +68,7 @@ struct graph{
 	long unsigned int nbCommunity;
     //NbEdge pas necessaire
 	long unsigned int nbEdge;
+   long unsigned int nbNodes;
 	double weightTot;
 	Community *community;
 };
@@ -93,5 +95,38 @@ void showGraph(Graph *);
 
 //Cree un graphe à partir d'un fichier.
 int readFile(char *filename, Graph *);
+
+/*
+Ajout au début de la liste $community$ une nouvelle Communauté qui possède
+un unique membre.
+
+input: g->un graphe initialisé
+return : 0 si succès
+		 -1 si mémoire insuffisante pour allocation
+		 -2 si précondition(s) non-respectée(s)
+*/
+int addCommunity(Graph *g);
+
+/*
+Ajout d'un arc de $start$ vers $end$ et de poids $weight$.
+ATTENTION: Pré: Chaque sommet est associé à une communauté toutes différentes
+		   Cette fonction est correcte qu'avec des communauté et non des sommets
+ 		   Puisqu'il n'existe pas de moyen pour identifier un membre
+		   spécifiquement, on considère qu'il est possible de l'identifier
+		   indépendamment et uniquement selon sa communauté.
+
+input: g : un graphe déjà initialisé
+	  start: la communauté d'origine de l'arc (0 < start < g->nbCommunity+1)
+	  end: la communauté de destination de l'arc (0 < end < g->nbCommunity+1)
+	  weight : le poids de cet arc ( weight != 0)
+
+return: 0 si succès
+		-1 si la communauté d'origine n'existe pas
+		-2 si la communauté de destination n'existe pas
+		-3 si erreur allocation
+		-4 si précondition(s) non respectée(s)
+*/
+int addEdge(Graph *g, long unsigned int a, long unsigned int b, double weight);
+
 
 #endif

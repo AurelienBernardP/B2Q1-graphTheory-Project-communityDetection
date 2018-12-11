@@ -1,22 +1,18 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include "pass.h"
 #include "graphes.h"
-
-typedef struct{
-    double weight; 
-    size_t destCommunityLabel;
-}BetweenCommunityEdge;
 
 static double** makeAdjacenceMatrix(Graph* g){
     if(!g){return NULL;}
     
     //start allocation of adjacent matrix of graph g
-    double** adjMatWithCommunity = malloc(g->nbNodes * sizeof( double*) );
+    double** adjMatWithCommunity = malloc(g->nbMembers * sizeof( double*) );
     if(!adjMatWithCommunity){
         return NULL;
     }
-    for(size_t i = 0; i < g->nbNodes; i++){
-        adjMatWithCommunity[i] = calloc(g->nbNodes + 1, sizeof(double));//+1 because we are adding an extra column for the node's community.
+    for(size_t i = 0; i < g->nbMembers; i++){
+        adjMatWithCommunity[i] = calloc(g->nbMembers + 1, sizeof(double));//+1 because we are adding an extra column for the member's community.
         if(!adjMatWithCommunity[i]){
             return NULL;
         }
@@ -28,32 +24,32 @@ static double** makeAdjacenceMatrix(Graph* g){
     while(currentCommunity->previous != NULL){
         currentCommunity = currentCommunity->previous;
     }
-    //list pointer is on first element of node list
+    //list pointer is on first element of member list
     
     //go through all communities
     while(currentCommunity !=NULL){
-        Node* currentNode = currentCommunity->member;
-        //back up node pointer to first element of memeber list
-        while(currentNode->previous != NULL){
-            currentNode = currentNode->previous;
+        Member* currentMember = currentCommunity->member;
+        //back up member pointer to first element of memeber list
+        while(currentMember->previous != NULL){
+            currentMember = currentMember->previous;
         }
-        //node pointer is on the first element of the members of the community list
+        //member pointer is on the first element of the members of the community list
          
-        //go through lost of nodes in the coomunity updating the adjacent matrix
-        while(currentNode != NULL){
-            //go through all neighbours of the node
-            while(currentNode->neighbours != NULL){
-                adjMatWithCommunity[(currentNode->label-1)][currentNode->neighbours->dest->label-1] = currentNode->neighbours->weight;
-                currentNode->neighbours = currentNode->neighbours->next;
+        //go through lost of members in the coomunity updating the adjacent matrix
+        while(currentMember != NULL){
+            //go through all neighbours of the member
+            while(currentMember->neighbours != NULL){
+                adjMatWithCommunity[(currentMember->label-1)][currentMember->neighbours->dest->label-1] = currentMember->neighbours->weight;
+                currentMember->neighbours = currentMember->neighbours->next;
             }
-            //add the number of the node's community in the matrix 
-            adjMatWithCommunity[(currentNode->label-1)][g->nbNodes] = (double)currentNode->myCom->label;
-            //matrix contains all the of the neighbours of the current node
-            currentNode = currentNode->next;
+            //add the number of the member's community in the matrix 
+            adjMatWithCommunity[(currentMember->label-1)][g->nbMembers] = (double)currentMember->myCom->label;
+            //matrix contains all the of the neighbours of the current member
+            currentMember = currentMember->next;
         }
         currentCommunity = currentCommunity->next;
     }
-    //matrix containss all the information needed from all the nodes
+    //matrix containss all the information needed from all the members
 
     return adjMatWithCommunity;
 }
@@ -66,14 +62,14 @@ static int printGraphWithCommunities(Graph* g, double** AdjacenceMatrix){// we a
         return -1;
     }
     fprintf(fp,"# number of communities = %lu\n",g->nbCommunity);
-    fprintf(fp,"# number of nodes = %lu\n",g->nbNodes);
+    fprintf(fp,"# number of members = %lu\n",g->nbMembers);
     fprintf(fp,"# number of edges = %lu\n",g->nbEdge);
-    fprintf(fp,"# adjacence Matrix | community of node\n");
-    for(size_t l=0; l<g->nbNodes; l++){//print adjacence matrix
-        for(size_t c=0; l<g->nbNodes; c++){
+    fprintf(fp,"# adjacence Matrix | community of member\n");
+    for(size_t l=0; l<g->nbMembers; l++){//print adjacence matrix
+        for(size_t c=0; l<g->nbMembers; c++){
             fprintf(fp,"%lf ",AdjacenceMatrix[l][c] );
         }
-        fprintf(fp,"| %lu",(unsigned long int)AdjacenceMatrix[l][g->nbNodes] );//last column is the community of the node
+        fprintf(fp,"| %lu",(unsigned long int)AdjacenceMatrix[l][g->nbMembers] );//last column is the community of the member
         fprintf(fp,"\n");//nex line of file
     }
     fclose(fp);
@@ -119,54 +115,45 @@ static size_t findIndexFromLabel(Graph* g, size_t communityLabel, BetweenCommuni
     return 0;
 }
 
-
-
-
-
-
 static void condenseLinksBetweenCommunities(Graph* g, Community* community, BetweenCommunityEdge* communityConections ){
     if(!g || !community || !communityConections){
         return;
     }
-    //init node pointer to first memeber of community
-    Node* currentNode = community->member;
+    //init member pointer to first memeber of community
+    Member* currentMember = community->member;
     //loop throught all memebers of community
-    while(currentNode != NULL){
-        //init edge pointer to first edge in the neightbours of current node
-        Edge* currentNodeEdge = currentNode->neighbours;
-        //loop through all edges of the current node and add the values to the table
-        while(currentNodeEdge != NULL){
-            communityConections[findIndexFromLabel(g, currentNodeEdge->dest->myCom->label, communityConections)].weight += currentNodeEdge->weight;
-            currentNodeEdge = currentNodeEdge->next;
+    while(currentMember != NULL){
+        //init edge pointer to first edge in the neightbours of current member
+        Edge* currentMemberEdge = currentMember->neighbours;
+        //loop through all edges of the current member and add the values to the table
+        while(currentMemberEdge != NULL){
+            communityConections[findIndexFromLabel(g, currentMemberEdge->dest->myCom->label, communityConections)].weight += currentMemberEdge->weight;
+            currentMemberEdge = currentMemberEdge->next;
         }
-        //all weights of the edges of current node have been summed to the array of connections
-        currentNode = currentNode->next;
+        //all weights of the edges of current member have been summed to the array of connections
+        currentMember = currentMember->next;
     }
-    //all the weight of all the node's edges in the community has been added to the array
+    //all the weight of all the member's edges in the community has been added to the array
     return;
 }
-
-
-
-
 
 static int makeNewGraph(Graph* oldG, Graph* newG){
     if(!oldG || !newG) { return -1;}
 
     //init new graph structure
-    newG->nbNodes = oldG->nbCommunity;
+    newG->nbMembers = oldG->nbCommunity;
     newG->weightTot = oldG->weightTot;
     int errorCode = 0;
 
     //add the numbers of communities needed
-    for(size_t i = 0; i<newG->nbNodes; i++){
+    for(size_t i = 0; i<newG->nbMembers; i++){
         errorCode = addCommunity(newG);
         if(errorCode){
             deleteGraph(newG);
             return -1;
         }
     }
-    //modify the label of the new communities and new nodes to keep the labels of the previous step graph
+    //modify the label of the new communities and new members to keep the labels of the previous step graph
     Community* oldGCurrentCom = oldG->community;
     Community* newGCurrentCom = newG->community;
     //first put pointers to first element of list
@@ -176,11 +163,11 @@ static int makeNewGraph(Graph* oldG, Graph* newG){
     while(newGCurrentCom->previous != NULL){
         newGCurrentCom = newGCurrentCom->previous;
     }
-    //enumerate all communities and nodes and modify their labels
+    //enumerate all communities and members and modify their labels
     while(oldGCurrentCom !=NULL && newGCurrentCom !=NULL){
         newGCurrentCom->member->label = newGCurrentCom->label = oldGCurrentCom->label;
         /*
-            newGCurrentCom->member->weightNode;
+            newGCurrentCom->member->weightmember;
             can't remember what the above line did but i think its not usefull ^-^" we will see when tested
         */    
         oldGCurrentCom = oldGCurrentCom->next;
@@ -195,7 +182,7 @@ static int makeNewGraph(Graph* oldG, Graph* newG){
     while(newGCurrentCom->previous !=NULL){
         newGCurrentCom = newGCurrentCom->previous;
     }
- /*   //establish the weight inside de comunity with a loop 
+    /*   //establish the weight inside de comunity with a loop 
     while(oldGCurrentCom != NULL && newGCurrentCom != NULL){
         Edge* newLoop = (Edge*) malloc(sizeof(Edge));
         if(!newLoop){
@@ -205,15 +192,15 @@ static int makeNewGraph(Graph* oldG, Graph* newG){
         newLoop->dest = newGCurrentCom->member;
         newLoop->next = NULL;
         newGCurrentCom->member->neighbours = newLoop;
-        newGCurrentCom->member->weightNode = oldGCurrentCom->weightInt;
+        newGCurrentCom->member->weightmember = oldGCurrentCom->weightInt;
 
         oldGCurrentCom = oldGCurrentCom->next;
         newGCurrentCom = newGCurrentCom->next;
 
     }
- */   //calculate the weight of al edges from one comunity to an other
+    */   //calculate the weight of al edges from one comunity to an other
 
-//////////all the commented code above is done in the part of the function below 
+    //////////all the commented code above is done in the part of the function below 
 
     oldGCurrentCom = oldG->community;
     newGCurrentCom = newG->community;

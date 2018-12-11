@@ -1,52 +1,51 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdbool.h>
 #include "graphes.h"
 
 /*
-Initialise le graphe mais n'alloue pas de mémoire)
+Initialise le graphe mais n'alloue pas de memoire)
 
 input: g-> le graphe
 */
 static void initGraph(Graph *g);
-
 /*
-Ajout au début de la liste $community$ une nouvelle Communauté qui possède
-un unique membre.
+Supprime une communaute du graphe
 
-input: g->un graphe initialisé
-return : 0 si succès
-		 -1 si mémoire insuffisante pour allocation
-		 -2 si précondition(s) non-respectée(s)
-*/
-static int addCommunity(Graph *g);
-
-/*
-Ajout d'un arc de $start$ vers $end$ et de poids $weight$.
-ATTENTION: Pré: Chaque sommet est associé à une communauté toutes différentes
-		   Cette fonction est correcte qu'avec des communauté et non des sommets
- 		   Puisqu'il n'existe pas de moyen pour identifier un membre
-		   spécifiquement, on considère qu'il est possible de l'identifier
-		   indépendamment et uniquement selon sa communauté.
-
-input: g : un graphe déjà initialisé
-	  start: la communauté d'origine de l'arc (0 < start < g->nbCommunity+1)
-	  end: la communauté de destination de l'arc (0 < end < g->nbCommunity+1)
-	  weight : le poids de cet arc ( weight != 0)
-
-return: 0 si succès
-		-1 si la communauté d'origine n'existe pas
-		-2 si la communauté de destination n'existe pas
-		-3 si erreur allocation
-		-4 si précondition(s) non respectée(s)
-*/
-static int addEdge(Graph *g, long unsigned int a, long unsigned int b, double weight);
-
-/*
-Supprime une communauté du graphe
-
-input: un graphe g déjà initialisé et une de ses communautés
+input: un graphe g deja initialise et une de ses communautes
 */
 static void deleteCommunity(Graph *g, Community* community);
+
+//Affiche un graphe different element d'un graphe
+static void showGraph(Graph *);
+
+//Cree un graphe à partir d'un fichier.
+static int readFile(char *filename, Graph *);
+
+/*
+Ajout du membre $member$ dans la communauté $community$.
+Apres l'ajout, si l'ancienne communauté de $member$ est vide, on la supprime
+
+input: g : un graphe initialisé
+	  member: un membre d'une communauté
+	  community: la nouvelle communauté du membre $member$
+*/
+static void changeCommunity(Graph *g, Member* member, Community* community);
+
+/*Summing the weights of all links from a member to a community
+
+input:member: a member of a community (!= NULL)
+		label: the label of a community
+
+return: >=0: the weights of the links from $member$ to community $label$
+		 -1: the member does not exist
+*/
+static double weightToCommunity(Member* member, size_t label);
+
+//Take off a member from its community
+static void deleteMemberFromCommunity(Graph *g, Member *member);
+
+static double gainModularity(Graph* g, Member* member, Community* com);
 
 static void initGraph(Graph *g){
 	if(g == NULL){
@@ -55,43 +54,180 @@ static void initGraph(Graph *g){
 	}
 	g->nbCommunity=0;
 	g->nbEdge=0;
+	g->nbMembers=0;
 	g->weightTot=0.0;
-    g->community=NULL;
+   g->community=NULL;
 }
 
-static int addCommunity(Graph *g){
+void deleteGraph(Graph *g){
+	if(g == NULL)
+		return;
+	Community *pCom,*tmpCom;
+	Member* pMember, *tmpMember;
+	Edge *pEdge,*tmpEdge;
+
+	//Delete all communities including its edges and its members
+	pCom=g->community;
+	while (pCom != NULL){
+	    pMember=pCom->member;
+	    while(pMember != NULL){
+		    pEdge=pMember->neighbours;
+		    while(pEdge != NULL){
+			    tmpEdge=pEdge;
+			    pEdge=pEdge->next;
+			    free(tmpEdge);
+			}
+		    tmpMember = pMember;
+		    pMember = pMember->next;
+		    free(tmpMember);
+		}
+		tmpCom=pCom;
+		pCom=pCom->next;
+		free(tmpCom);
+	}
+	initGraph(g);
+}
+
+static void showGraph(Graph *g){
+	Community *pCom;
+	Member *pMember;
+	Edge *pEdge;
+	if(g->community == NULL){
+		printf("Graphe vide\n");
+		return;
+	}
+	printf("Nombre Sommets: %lu\n Nombre Arc: %lu\n Poids total=%lf\n", g->nbCommunity, g->nbEdge, g->weightTot);
+	pCom=g->community;
+	while(pCom != NULL){
+		printf("\n");
+		printf("Communaute label: %lu\n Poids total: %lf\n Poids interieur: %lf\n", pCom->label-1, pCom->weightTot, pCom->weightInt);
+		pMember=pCom->member;
+		while(pMember != NULL){
+			printf("Le sommet a un poids total de %lf\n", pMember->weightMember);
+		    if (pMember->neighbours == NULL)
+			    printf(" -> ce sommet n'a aucun arc sortant\n ");
+		    else{
+		    	pEdge=pMember->neighbours;
+		    	while(pEdge != NULL){
+		    		printf(" -> arc de %lu vers %lu avec l'info. %lf \n", pMember->myCom->label-1,pEdge->dest->myCom->label-1, pEdge->weight);
+			    	pEdge=pEdge->next;
+			    }
+		    }
+		    printf("\n");
+		    pMember=pMember->next;
+		}
+	pCom=pCom->next;
+	}
+}
+
+int addEdge(Graph *g, size_t start, size_t end, double weight){
+	if(start == 0 || start > g->nbMembers || weight == 0 || g == NULL
+	   			   						|| end == 0 || end > g->nbMembers){
+		printf("Preconditions non respectees pour addEdge\n");
+		return -4;
+	}
+	Community *pComStart, *pComEnd;
+	Member* pMemberStart, *pMemberEnd;
+	Edge *pEdge;
+
+	//Searching for the member $start$
+	pMemberStart = NULL;
+	pComStart=g->community;
+	while (pComStart != NULL && pMemberStart == NULL){
+		pMemberStart = pComStart->member;
+		while(pMemberStart!=NULL && pMemberStart->label != start)
+			pMemberStart = pMemberStart->next;
+		pComStart=pComStart->next;
+	}
+
+	if (pMemberStart == NULL){
+		printf("Erreur! Creation d'un arc dont l'origine n'existe pas\n");
+		return -1;
+	}
+
+	//Searching for the member $end$
+	pMemberEnd = NULL;
+	pComEnd=g->community;
+	while (pComEnd != NULL && pMemberEnd == NULL){
+		pMemberEnd = pComEnd->member;
+		while(pMemberEnd!=NULL && pMemberEnd->label != end){
+			pMemberEnd = pMemberEnd->next;
+		}
+		pComEnd=pComEnd->next;
+	}
+
+	if (pMemberEnd == NULL){
+		printf("Erreur! Creation d'un arc dont la destination n'existe pas\n");
+		return -1;
+	}
+
+	//Allocating an edge
+	pEdge=(Edge *) malloc(sizeof(Edge));
+	if (pEdge == NULL){
+		printf("Erreur! Memoire insuffisante pour creer un arc\n");
+		return -3;
+	}
+
+	//Initialisation of an edge from $start$ to $end$
+	pEdge->weight = weight;
+	pEdge->dest = pMemberEnd;
+	pEdge->next = pMemberStart->neighbours;
+	pMemberStart->neighbours = pEdge;
+
+	//Updating the community due to the addition of the edge
+	pMemberStart->weightMember += weight;
+	pMemberStart->myCom->weightTot += weight;
+
+	//If the edge is a loop, the weight are doubled
+   if(start == end){
+		pMemberStart->myCom->weightInt += 2*weight;
+		pMemberStart->myCom->weightTot += weight;
+		g->weightTot += weight;
+	}
+
+	//Updating the graph
+	g->weightTot += weight;
+	g->nbEdge++;
+	return 0;
+}
+
+int addCommunity(Graph *g){
 	if(g == NULL){
-		printf("Préconditions non respectées pour addCommunity\n");
+		printf("Preconditions non respectees pour addCommunity\n");
 		return -2;
 	}
-	Node *member;
-	Community* community;
+	Member *member;
+	Community *community;
 
 
-	//Allocation d'une nouvelle communauté et d'un membre
+	//Allocating new community
 	community=(Community *) malloc(sizeof(Community));
 	if (community == NULL){
 		printf("Erreur! Memoire insuffisante pour creer une community\n");
 		return -1;
 	}
-	member=(Node *) malloc(sizeof(Node));
+
+	//Allocating new member
+	member=(Member *) malloc(sizeof(Member));
 	if (member == NULL){
 		free(community);
 		printf("Erreur! Memoire insuffisante pour creer un membre\n");
 		return -1;
 	}
 
-	//Mise à jour du nombre de communauté
+	//Updating number of communities and members
 	g->nbCommunity++;
+	g->nbMembers++;
 
-	//Initialisation du membre
-	member->neighbours=NULL;
-	member->weightNode=0.0;
-	member->next=NULL;
+	//Initialisation of the member
+	member->label = g->nbMembers;
+	member->neighbours = NULL;
+	member->weightMember = 0.0;
+	member->next = NULL;
 	member->previous = NULL;
 	member->myCom = community;
 
-	//Initialisation de la communauté
+	//Initialisation of the community and adding the member in it
 	community->label = g->nbCommunity;
 	community->weightTot = 0.0;
 	community->weightInt = 0.0;
@@ -99,107 +235,32 @@ static int addCommunity(Graph *g){
 	community->previous =NULL;
 	community->next=g->community;
 
-	//Rajout de cette nouvelle communauté au début de la liste
-	if(g->community != NULL){
+	//Adding the new community at the beginning of the list
+	if(g->community != NULL)
 		g->community->previous = community;
-		g->community = community;
-	}else
-		g->community = community;
+	g->community = community;
 	return 0;
-}
 
-static int addEdge(Graph *g, long unsigned int start, long unsigned int end,
-																double weight){
-	if(start == 0 || start > g->nbCommunity || weight == 0 || g == NULL
-	   			   						|| end == 0 || end > g->nbCommunity){
-		printf("Préconditions non respectées pour addEdge\n");
-		return -4;
-	}
-	Community *pCom, *pCom2;
-	Edge *pEdge;
-
-	/* on parcourt les communautés jusqu'à trouver $start$ */
-	pCom=g->community;
-	while (pCom != NULL && pCom->label != start)
-		pCom=pCom->next;
-
-	if (pCom == NULL){
-		printf("Erreur! Création d'un arc dont l'origine n'existe pas\n");
-		return -1;
-	}
-
-	/* on parcourt les communautés jusqu'à trouver $end$ */
-	pCom2=g->community;
-	while (pCom2 != NULL && pCom2->label != end)
-		pCom2=pCom2->next;
-
-	if (pCom2 == NULL){
-		printf("Erreur! Création d'un arc dont l'extrémité n'existe pas\n");
-		return -2;
-	}
-
-	//Allocation d'un arc
-	pEdge=(Edge *) malloc(sizeof(Edge));
-	if (pEdge == NULL){
-		printf("Erreur! Mémoire insuffisante pour créer un arc\n");
-		return -3;
-	}
-
-	//Initialisation d'un arc de $start$ à $end$
-	pEdge->weight = weight;
-	pEdge->dest = pCom2->member;
-
-	//Ajout d'un arc au début de la liste du membre $start$
-	pEdge->next = pCom->member->neighbours;
-	pCom->member->neighbours = pEdge;
-
-	//Mise à jour de la communauté dûe à l'ajout de l'arc
-	pCom->member->weightNode += weight;
-	pCom->weightTot += weight;
-
-    //ATTENTION: On rajoute le poids d'une boucle donc on fait 2*
-    if(pCom2->label == pCom->label){
-        pCom->weightInt += 2*weight;
-		pCom->weightTot += weight;
-		g->weightTot += weight;
-	}
-    //Mise à jour du graphe dûe à l'ajout de l'arc
-	g->weightTot += weight;
-	g->nbEdge++;
-	return 0;
-}
-
-static double weightToCommunity(Node* node, long unsigned int label){
-    Edge* pNeighbours = node->neighbours;
-    double weightToCommunity = 0.0;
-
-    while(pNeighbours != NULL){
-        if(pNeighbours->dest->myCom->label == label)
-            weightToCommunity += pNeighbours->weight;
-        pNeighbours = pNeighbours->next;
-    }
-
-    return weightToCommunity;
 }
 
 static void deleteCommunity(Graph *g, Community* community){
 	if(g == NULL || community == NULL)
 		return;
 
-	//Si une seule communauté
+	//If unique community
 	if(community->previous == NULL && community->next == NULL)
 		g->community = NULL;
 	else{
-		//Si la premiere communauté
+		//If first community of the list
 		if(community->previous == NULL){
 			g->community = community->next;
 			community->next->previous = NULL;
 		}
 		else{
-			//Si la derniere communauté
+			//If last community of the list		
 			if(community->next == NULL)
 				community->previous->next = community->next;
-			//Si communauté du milieu
+			//If middle community of the list
 			else{
 				community->previous->next = community->next;
 				community->next->previous = community->previous;
@@ -210,166 +271,207 @@ static void deleteCommunity(Graph *g, Community* community){
 	free(community);
 }
 
-int changeCommunity(Graph *g, Node* node, Community* community){
-	if(g == NULL || node == NULL || community == NULL){
-		printf("Préconditions non respectées pour changeCommunity\n");
-		return -1;
-	}
-
-	if(node->myCom->label == community->label)
-		return 0;
-
+static void deleteMemberFromCommunity(Graph *g, Member *member){
+	if(g == NULL || member == NULL)
+		return;
 	double weightIn;
-unsigned is_del=0;
-	//On retire le membre de sa communauté actuelle
-	//Si le seul membre
-	if(node->previous == NULL && node->next == NULL){
-		node->myCom->member = NULL;
-		printf("myCom: %lu ", node->myCom->label-1);
+	//If unique member, then we delete community
+	if(member->previous == NULL && member->next == NULL){
+		member->myCom->member = NULL;
+		printf("myCom: %lu ", member->myCom->label-1);
 		printf("got deleted\n");
-		deleteCommunity(g, node->myCom);
-		is_del = 1;
+		deleteCommunity(g, member->myCom);
 	}
+	//If the member is not unique, then we just take it off
 	else{
-		//le premier membre de la communauté
-		if(node->previous == NULL){
-			node->next->previous = NULL;
-			node->myCom->member = node->next;
+		//If first member from the list
+		if(member->previous == NULL){
+			member->next->previous = NULL;
+			member->myCom->member = member->next;
 		}
 		else{
-			//Si le dernier membre
-			if(node->next == NULL)
-				node->previous->next = NULL;
+			//If last member from the list
+			if(member->next == NULL)
+				member->previous->next = NULL;
+			//If middle member from the list
 			else{
-			node->previous->next = node->next;
-			node->next->previous = node->previous;
+			member->previous->next = member->next;
+			member->next->previous = member->previous;
 			}
 		}
-		
-		//On enleve le poids de la communauté suite au retrait de son membre
-		weightIn = weightToCommunity(node, node->myCom->label);
-		node->myCom->weightTot -= node->weightNode;
-		node->myCom->weightTot += weightIn;        
-		//node->myCom->weightInt -= weightIn;
+		//Taking the weights off the community due to the calling off
+		weightIn = weightToCommunity(member, member->myCom->label);
+		member->myCom->weightTot -= member->weightMember;
+		member->myCom->weightTot += weightIn;        
+		member->myCom->weightInt -= weightIn;
+	}
+}
+
+static void changeCommunity(Graph *g, Member* member, Community* community){
+	if(g == NULL || member == NULL || community == NULL){
+		printf("Preconditions non respectees pour changeCommunity, communaute inchangee\n");
+		return;
 	}
 
+	//If member is already in the community then we do nothing
+	if(member->myCom->label == community->label)
+		return;
 
-	//Ajout du membre dans la nouvelle communauté
-	node->myCom = community;
-	node->next = community->member;
-	node->previous = NULL;
-	community->member->previous = node;
-	community->member = node;
+	//Taking the member off its community
+	deleteMemberFromCommunity(g,member);
 
-	//On évite de compter 2 fois les liens liant le point et la communauté
-	//Puisque le poids d'un sommet est la somme de ses voisins, le poids total
-	//de la communauté doit être la somme de tous ses sommets. Et donc
-	//si 2 sommets d'une meme communauté sont voisins, comptera 2 fois le lien
-	weightIn = weightToCommunity(node,community->label);
+	//Addingg the member in the new community
+	member->myCom = community;
+	member->next = community->member;
+	member->previous = NULL;
+	community->member->previous = member;
+	community->member = member;
+
+	//Updating the weight of the new community
+	double weightIn;
+	weightIn = weightToCommunity(member,community->label);
 	community->weightInt += weightIn;
-	community->weightTot += node->weightNode;
-	//community->weightTot -= weightIn;
+	community->weightTot += member->weightMember;
+	community->weightTot -= weightIn;
 
 
-	//if(is_del)
-	//	showGraph(g);
-	return 0;
+	return;
 }
 
+static double weightToCommunity(Member* member, size_t label){
+	if(member == NULL){
+		printf("Le membre n'existe pas (weightToCommunity)");
+		return -1;
+	}
+   Edge* pNeighbours = member->neighbours;
+   double weightToCommunity = 0.0;
 
-/*
-Supprime le graphe en entier
-*/
-void deleteGraph(Graph *g){
-	if(g == NULL)
+   while(pNeighbours != NULL){
+		if(pNeighbours->dest->myCom->label == label)
+			weightToCommunity += pNeighbours->weight;
+		pNeighbours = pNeighbours->next;
+   }
+
+   return weightToCommunity;
+}
+
+//Est il necessaire de calculer le gain entre membre de communaute?
+//Oui car sinon le membre changera de communaute bcp plus de fois
+//Si non 
+//		-> mettre if(member->myCom->label == com->label) return 0.0;
+static double gainModularity(Graph* g, Member* member, Community* com){
+	if(g == NULL || com == NULL || member == NULL){
+		printf("Preconditions non respectees pour gainModularity\n");
+		return -1;
+	}
+   printf("from %lu to %lu\n",member->myCom->label-1 ,com->label-1);
+   double weightTot;
+   double comWeightInt, comWeightExt;
+   double memberWeight, memberWeightCom;
+   Member* pMember;
+   Edge* pNeightbours;
+
+   //sum of the weights of the links inside C
+   comWeightInt = com->weightInt;
+   //sum of the weights of the links incident to Members in C
+   comWeightExt = com->weightTot - com->weightInt;
+
+   //sum of the weights links incident to Members in i
+   memberWeight = member->weightMember;
+   //sum of the weights of the links from i to Members in c
+   memberWeightCom = weightToCommunity(member, com->label);
+
+   //sum of the weights of all the links in the network
+   weightTot = g->weightTot;
+
+   printf("sum_in = %lf, sum_tot = %lf, k_in = %lf, k_i = %lf, m = %lf\n",comWeightInt,comWeightExt,memberWeightCom,memberWeight,weightTot);
+   double t1 = (comWeightInt + memberWeightCom)/(weightTot);
+   double t2 = (comWeightExt + memberWeight)/(weightTot);
+   double t3 = t1 - (t2 * t2);
+
+   double s1 = (comWeightExt/(weightTot))*(comWeightExt/(weightTot));
+   double s2 = (memberWeight/(weightTot))*(memberWeight/(weightTot));
+   double s3 = (comWeightInt/(weightTot))-s1-s2;
+
+   printf("q = %lf \n",t3-s3);
+   return (t3 - s3);
+}
+
+void stepOne(Graph* g){
+	if(g==NULL)
 		return;
-	Community *pCom,*tmpCom;
-	Node* pNode, *tmpNode;
-	Edge *pEdge,*tmpEdge;
+	Community *pCom, *pComNext,*pNewCom;
+	Member *pMember, *pMemberNext;
+	Edge *pNeighbours;
+	unsigned int i, has_imp;
+	double maxQ, q;
 
-	//Pour chaque communauté, on supprime les arcs de tous ses membres
-	//pour enfin finir par supprimer elle-même
-	pCom=g->community;
-	while (pCom != NULL){
-	    pNode=pCom->member;
-	    while(pNode != NULL){
-		    pEdge=pNode->neighbours;
-		    while(pEdge != NULL){
-			    tmpEdge=pEdge;
-			    pEdge=pEdge->next;
-			    free(tmpEdge);
+	pCom = g->community;
+
+	//Browsing each community
+	for(i=1; i <= g->nbCommunity; i++){
+		if(pCom == NULL)
+			pCom = g->community;
+		maxQ = 0.0;
+		has_imp = 0;
+
+		//Browsing each member of the community
+		pMember = pCom->member;
+		while (pMember != NULL){
+			//Browsing each neightours of the member
+			pNeighbours = pMember->neighbours;
+			while(pNeighbours != NULL){
+				q = gainModularity(g, pMember, pNeighbours->dest->myCom);
+				if (maxQ < q) {
+					maxQ = q;
+					pNewCom = pNeighbours->dest->myCom;
+					has_imp = 1;
+				}
+				pNeighbours = pNeighbours->next;
 			}
-		    tmpNode = pNode;
-		    pNode = pNode->next;
-		    free(tmpNode);
-		}
-		tmpCom=pCom;
-		pCom=pCom->next;
-		free(tmpCom);
-	}
-	initGraph(g);
-}
 
-void showGraph(Graph *g){
-	Community *pCom;
-	Node *pNode;
-	Edge *pEdge;
-	if(g->community == NULL){
-		printf("Graphe vide\n");
-		return;
-	}
-	printf("Nombre Sommets: %lu\n Nombre Arc: %lu\n Poids total=%lf\n", g->nbCommunity, g->nbEdge, g->weightTot);
-	pCom=g->community;
-	while(pCom != NULL){
-		printf("\n");
-		printf("Communauté label: %lu\n Poids total: %lf\n Poids intérieur: %lf\n", pCom->label-1, pCom->weightTot, pCom->weightInt);
-		pNode=pCom->member;
-		if(pNode==NULL){
-			printf("wtf\n");
+			//(pMember might be in other community or pCom might be deleted)
+			//Keeping the order of the browsing
+			pMemberNext = pMember->next;
+			pComNext = pCom->next;
+			if(has_imp && pMember->myCom->label != pNewCom->label){
+				printf("**************************From %lu to %lu because %lf\n", pMember->myCom->label-1, pNewCom->label-1,maxQ);
+				changeCommunity(g, pMember, pNewCom);
+				i = 0;//If a member has changed of community, then we have to recheck all communities
+			}
+			pMember = pMemberNext;
 		}
-		while(pNode != NULL){
-			printf("Le sommet a un poids total de %lf\n", pNode->weightNode);
-		    if (pNode->neighbours == NULL)
-			    printf(" -> ce sommet n'a aucun arc sortant\n ");
-		    else{
-		    	pEdge=pNode->neighbours;
-		    	while(pEdge != NULL){
-		    		printf(" -> arc de %lu vers %lu avec l'info. %lf \n", pNode->myCom->label-1,pEdge->dest->myCom->label-1, pEdge->weight);
-			    	pEdge=pEdge->next;
-			    }
-		    }
-		    printf("\n");
-		    pNode=pNode->next;
-		}
-	pCom=pCom->next;
+		pCom = pComNext;
 	}
 }
 
-
-int readFile(char *filename, Graph *g){
+static int readFile(char *filename, Graph *g){
 	if(g == NULL){
-		printf("Le graphe doit être alloué avant de lire le fichier\n");
+		printf("Le graphe doit être alloue avant de lire le fichier\n");
 		return -1;
 	}
 	FILE *fp;
-	char line[MAX+1]; //Max == 10000 caracteres par ligne
-	int i,j,nbS1,nbLine,node,nbEdge,createEdge;
+	char line[MAX+1];
+	int i,j,nbS1,nbLine,member,nbEdge,createEdge;
 	double weight;
 
 	initGraph(g);
-	fp=fopen(filename,"r"); /* ouvre un fichier en lecture */
+	//Open the file in read mode
+	fp=fopen(filename,"r");
 
-	nbLine=0; /* compte les lines du fichier */
-	node=0; /* label du sommet en cours */
-	nbS1=0; /* compte les sommets de la 1ere line */
+	nbLine=0;
+	member=0;
+	nbS1=0;
 
 
  	while(fgets(line,MAX,fp) != NULL){
-		nbLine++; /* compte le nombre de lines du fichier */
-		if (line[0] != '\n'){ /* on passe les lines vides */
+		//Counting the number of lines in the file
+		nbLine++;
+		//Denying all empty lines
+		if (line[0] != '\n'){
 			i=0;
-			//Check le nombre de sommets donné par la premiere ligne
-			if (!nbS1){ /* compte les sommets de la 1ere line */
+			//Check the number of all nodes given by the first line
+			if (!nbS1){
 				nbS1=1;
 				while (line[i] != '\n'){
 						if (line[i] == ',')
@@ -379,22 +481,25 @@ int readFile(char *filename, Graph *g){
 				for (j=1; j<=nbS1; j++){
 					addCommunity(g);
 				}
-				i=0; /* on relit la 1ere line */
+				//Reading the first line again
+				i=0;
 			}
-			node++; /* sommet courant & origine des arcs */
-			nbEdge=0; /* controle le nombre d'arcs crees */
+			//The current node and the origin of the links
+			member++; 
+			//The number of edges created
+			nbEdge=0;
 			while (line[i] != '\n'){
 				weight=0;
 				createEdge=1;
-				//Lis le nombre/chiffre pour savoir le poids entre l'arc
-				// %node et %nbEdge
+				//Reading the number for the weight of the link
 				while (line[i] != ',' && line[i] != '\n'){
 					while (line[i]==' ' || line[i]=='\t')
 						i++;
+					//If no numbers, then delete
 					if ((line[i]>'9' || line[i]<'0') && line[i]!='x'){
-						printf("Erreur à la line %d !\n",nbLine);
+						printf("Erreur a la line %d !\n",nbLine);
 						deleteGraph(g);
-						return -1; /* pas des chiffres ! */
+						return -1;
 					}
 					if (line[i]=='x')
 						createEdge=0;
@@ -407,12 +512,12 @@ int readFile(char *filename, Graph *g){
 					i++;
 				nbEdge++;
 				if (nbEdge<=nbS1 && createEdge==1)
-					addEdge(g,node,nbEdge,weight); /* line pas trop longue */
+					addEdge(g,member,nbEdge,weight);
 			}
-			if (nbEdge != nbS1){ /* pas le bon nombre de champs sur line */
-				printf("Erreur à la line %d !\n",nbLine);
+			if (nbEdge != nbS1){
+				printf("Erreur a la line %d !\n",nbLine);
 				deleteGraph(g);
-				return -1; /* pas le bon nombre de champs */
+				return -1;
 			}
 		}
     }
@@ -420,109 +525,14 @@ int readFile(char *filename, Graph *g){
 	return 0;
 }
 
-
-//Est il necessaire de calculer le gain entre membre de communauté?
-//Oui car sinon le membre changera de communauté bcp plus de fois
-//Si non 
-//		-> mettre if(node->myCom->label == com->label) return 0.0;
-long double gainModularity(Graph* g, Node* node, Community* com){
-
-    printf("from %lu to %lu\n",node->myCom->label-1 ,com->label-1);
-    long double weightTot;
-    long double comWeightInt, comWeightExt;
-    long double nodeWeight, nodeWeightCom;
-    Node* pMember;
-    Edge* pNeightbours;
-
-    //sum of the weights of the links inside C
-    comWeightInt = com->weightInt;
-    //sum of the weights of the links incident to nodes in C
-    comWeightExt = com->weightTot - com->weightInt;
-
-    //sum of the weights links incident to nodes in i
-    nodeWeight = node->weightNode;
-    //sum of the weights of the links from i to nodes in c
-    nodeWeightCom = weightToCommunity(node, com->label);
-
-    //sum of the weights of all the links in the network
-    weightTot = g->weightTot;
-
-    printf("sum_in = %Lf, sum_tot = %Lf, k_in = %Lf, k_i = %Lf, m = %Lf\n",comWeightInt,comWeightExt,nodeWeightCom,nodeWeight,weightTot);
-    long double t1 = (comWeightInt + nodeWeightCom)/(weightTot);
-    long double t2 = (comWeightExt + nodeWeight)/(weightTot);
-    long double t3 = t1 - (t2 * t2);
-
-    long double s1 = (comWeightExt/(weightTot))*(comWeightExt/(weightTot));
-    long double s2 = (nodeWeight/(weightTot))*(nodeWeight/(weightTot));
-    long double s3 = (comWeightInt/(weightTot))-s1-s2;
-
-    printf("q = %LF \n",t3-s3);
-    return (t3 - s3);
-}
-
-
-void stepOne(Graph* g){
-	if(g==NULL)
-		return;
-	Community *pCom, *pComNext,*pNewCom;
-	Node *pMember, *pMemberNext;
-	Edge *pNeighbours;
-	unsigned int i, has_imp;
-	long double maxQ, q;
-
-	pCom = g->community;
-
-	//On parcourt chaque communauté
-	for(i=1; i <= g->nbCommunity; i++){
-		if(pCom == NULL)
-			pCom = g->community;
-		maxQ = 0.0;
-		has_imp = 0;
-
-		//On parcourt chaque membre de la communauté
-		pMember = pCom->member;
-		while (pMember != NULL){
-			//On parcourt chaque voisin du membre
-			pNeighbours = pMember->neighbours;
-			while(pNeighbours != NULL){
-				q = gainModularity(g, pMember, pNeighbours->dest->myCom);
-				if (maxQ < q) {
-					maxQ = q;
-					pNewCom = pNeighbours->dest->myCom;
-					has_imp = 1;
-				}
-				pNeighbours = pNeighbours->next;
-			}
-
-			//Si pMember est passé à une autre communauté,
-			//pMember->next sera un membre de cette nouvelle communauté
-			//pMemberNext permet de garder l'ordre du parcourt de la boucle
-			pMemberNext = pMember->next;
-
-			//Traite le cas où la communauté n'existe plus.
-			//Si la communauté est vide apres le changement, il sera supprimé
-			//Dés lors, il sera impossible de pointer vers la communauté
-			//suivante. pComNext nous permet d'éviter  ce cas
-			pComNext = pCom->next;
-			if(has_imp && pMember->myCom->label != pNewCom->label){
-				printf("**************************From %lu to %lu because %Lf\n", pMember->myCom->label-1, pNewCom->label-1,maxQ);
-				changeCommunity(g, pMember, pNewCom);
-				i = 0; //on doit refaire un tour
-			}
-			pMember = pMemberNext;
-		}
-		pCom = pComNext;
-	}
-}
-
-
 int main(int argc, char *argv[]){
-    char filename[10]="graps.txt";
-    Graph *g = malloc(sizeof(Graph));
-    if(g==NULL)
-        return -1;
-    readFile(filename,g);
-    showGraph(g);
+   char filename[10]="graph.txt";
+   Graph *g = malloc(sizeof(Graph));
+   if(g==NULL)
+   	return -1;
+   readFile(filename,g);
+
+   showGraph(g);
 	Community* tmp;
 	Community* com = g->community;
 	//Reverse list
@@ -535,53 +545,53 @@ int main(int argc, char *argv[]){
 		com = com->previous;
 	}
 	showGraph(g);
-/*	Node* pNode;
+/*	Member* pMember;
 
 
-    //Ajout du sommet 14 dans communauté 2
+    //Ajout du sommet 14 dans communaute 2
 	Community* pCom = g->community;
 	while(pCom->label-1 != 2)
 		pCom = pCom->next;
-	pNode = g->community->next->member;
-	printf("De pNode: %lu à pCom: %lu\n", pNode->myCom->label-1, pCom->label-1);
+	pMember = g->community->next->member;
+	printf("De pMember: %lu a pCom: %lu\n", pMember->myCom->label-1, pCom->label-1);
 
-	changeCommunity(g,pNode ,pCom);
+	changeCommunity(g,pMember ,pCom);
 	showGraph(g);
 
-    //Ajout du sommet 15 dans communauté 2
+    //Ajout du sommet 15 dans communaute 2
     pCom = g->community;
 	while(pCom->label-1 != 2)
 		pCom = pCom->next;
-	pNode = g->community->member;
-	printf("De pNode: %lu à pCom: %lu\n", pNode->myCom->label-1, pCom->label-1);
-	changeCommunity(g,pNode ,pCom);
+	pMember = g->community->member;
+	printf("De pMember: %lu a pCom: %lu\n", pMember->myCom->label-1, pCom->label-1);
+	changeCommunity(g,pMember ,pCom);
 	showGraph(g);
 
-    //Ajout du sommet 0 dans communauté 2
+    //Ajout du sommet 0 dans communaute 2
     pCom = g->community;
 	while(pCom->label-1 != 0)
 		pCom = pCom->next;
-	pNode = pCom->member;
+	pMember = pCom->member;
 
 	pCom = g->community;
 	while(pCom->label-1 != 2)
 		pCom = pCom->next;
-	printf("De pNode: %lu à pCom: %lu\n", pNode->myCom->label-1, pCom->label-1);
-	changeCommunity(g,pNode ,pCom);
+	printf("De pMember: %lu a pCom: %lu\n", pMember->myCom->label-1, pCom->label-1);
+	changeCommunity(g,pMember ,pCom);
 	showGraph(g);
 
-	//Ajout du 2ieme membre de le communauté 2 à la communauté 3
+	//Ajout du 2ieme membre de le communaute 2 a la communaute 3
 	pCom = g->community;
 	while(pCom->label-1 != 2)
 		pCom = pCom->next;
-	pNode = pCom->member->next;
+	pMember = pCom->member->next;
 	pCom = g->community;
 	while(pCom->label-1 != 3)
 		pCom = pCom->next;
 
-	printf("De pNode: %lu à pCom: %lu\n", pNode->myCom->label-1, pCom->label-1);
+	printf("De pMember: %lu a pCom: %lu\n", pMember->myCom->label-1, pCom->label-1);
 
-	changeCommunity(g,pNode ,pCom);
+	changeCommunity(g,pMember ,pCom);
 
 	showGraph(g);
 	*/

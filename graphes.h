@@ -44,6 +44,12 @@ struct graph{
 	Community *community;
 };
 
+/*
+Alloue et initialise le graphe
+
+*/
+Graph *initGraph();
+
 //Supprime le graphe en entier
 void deleteGraph(Graph *);
 

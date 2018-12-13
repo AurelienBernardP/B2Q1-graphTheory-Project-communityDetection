@@ -1,388 +1,708 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdbool.h>
+#include <string.h>
+#include <sys/stat.h>
 
+#include "optimisation.h"
 #include "aggregation.h"
 
-typedef struct{
-    double weight; 
-    size_t destCommunityLabel;
-}LinksToCommunity;
 
-/* bubbleSort
-* Sort the array $array$ which size is $size$
+/* deleteCommunity
+* Delete the community $community$ from the graph g
 *
 * [input]
-* array : an initialised array
-* size : the size of the array $array$
+* g: an initialised graph
+* community : an initialised community inside the graph g
 *
 */
-static void bubbleSort(size_t *array, size_t size);
+static void deleteCommunity(Graph *g, Community* community);
 
-/* deleteMatrix
-* Delete a 2-dimensional matrix of size ($size$ x $>=size$)
+/* displayGraph
+* Show all elements of the graph
 *
 * [input]
-* matrix: an initialised matrix
-* size: the size of the mtatrix
+* g: a graph
+* showEdges: a boolean which indicates if all edges must be displayed
 *
 */
-static void deleteMatrix(double** matrix, size_t size);
+static void displayGraph(Graph *g, bool showEdges);
 
-/* makeAdjacencyMatrix
-* Create the adjacency matrix of the graph g
+/* readFile
+* Reading the file $filename$  to create a graph -the format of the file is specific.
+*
+* [input]
+* filename : the name of the file which describes a graph
+* g : an initialised empTY graph
+*
+* [return]
+* 0 : The graph described in the file $filename$ is successfully created
+* -1 : The format of the file $filename$ is incorrect.
+* -2 : The file $filename$ does not exist.
+*
+*/
+static int readFile(char *filename, Graph * g);
+
+/* changeMemberToCommunity
+* Move the member $member$ to the community $community$ of the graph
+*
+* [input]
+* g : an initialised graph
+* member : an initialised member inside a community of the graph g
+* community : a community of graph g
+*
+*/
+static void changeMemberToCommunity(Graph *g, Member* member, Community* community);
+
+/* weightToCommunity
+* Summing the weight of all links from the member $member$ to all members 
+* of the community which is labelled $label$
+*
+* [input]
+* member : an initialised member of a graph
+* label : the label of a community of the same graph
+*
+* [return]
+* >=0 : the sum of the weight of all links from $member$ to community labelled $label$
+* 0 : The member does not exist
+*/
+static double weightToCommunity(Member* member, size_t label);
+
+/* deleteMemberFromCommunity
+* Take off the member $member$ from its community and delete the community if 
+* it is empty after the withdrawal
+*
+* [input]
+* g: an initialised graph
+* member : an initialised member inside a community of the graph g
+*
+*/
+static void deleteMemberFromCommunity(Graph *g, Member *member);
+
+/* gainModularity
+* Calculate the gain of modularity when the member $member$ is moved
+* to the community $com$
+*
+* [input]
+* g : an initialised graph
+* member : an initialised member inside a community of the graph g
+* com : a community of graph g
+*
+* [return]
+* (>=0) or (< 0) : the gain of modularity
+*
+*/
+static double gainModularity(Graph* g, Member* member, Community* com);
+
+/* power
+*Calculate the power of $x$ to $y$
+*
+* [input]
+* x : the base
+* y : the power
+* [return]
+* the power of x to $y$
+*
+*/
+static double power(double x, int y);
+
+/* modularityOptimisation
+* Applying modularity optimisation (described in the article).
 *
 * [input]
 * g : an initialised graph
 *
-* [return]
-* NULL : Error at allocating memory for the matrix
-* adjMat : the adjacency matrix of the graph g
-*
 */
-static double** makeAdjacencyMatrix(Graph* g);
+static void modularityOptimisation(Graph* g);
 
-/* printGraphWithCommunities
-* Write the graph $g$ in the file $filename$
-*
-* [input]
-* g : an initialised graph
-* AdjacencyMatrix : the adjacency matrix of the graph $g$
-* filename : the path to a non-existent file
-*
-* [return]
-* 0 : The graph has been successfully saved in a file
-* -1 : Error at applying the operation
-*
-*/
-static int printGraphWithCommunities(Graph* g, double** AdjacencyMatrix, char* filename);
-
-/* makeTrace
-* Saving the graph $g$ in the file $filename$
-*
-* [input]
-* g : an initialised graph
-* filename : the path to a non-existent file
-*
-* [return]
-* 0 : The graph has been successfully saved in a file
-* -1 : Error at applying the operation
-*
-*/
-static int makeTrace(Graph* g, char* filename);
-
-/* findIndex
-* Saving the graph $g$ in the file $filename$
-*
-* [input]
-* g : an initialised graph
-* filename : the path to a non-existent file
-*
-* [return]
-* 0 : The graph has been successfully saved in a file
-* -1 : Error at applying the operation
-*
-*/
-static size_t findIndex(Graph* g, size_t communityLabel, LinksToCommunity* communityConnections);
-
-/* condenseLinksBetweenCommunities 
-* Sum the weight of all links from the members of $community$ to
-* the members of all other communities
-*
-* [input]
-* g : an initialised graph
-* community : a community of the graph g
-* communityConnections : initialised structure of type $LinksToCommunity$
-*
-*/
-static void condenseLinksBetweenCommunities(Graph* g, Community* community, LinksToCommunity* communityConnections);
-
-/* makeTrace
-* Creating a condensed version of the graph $oldGraph$ to the graph $newGraph$
-*
-* [input]
-* oldG : an initialised graph
-* oldN : an initialised graph
-*
-* [return]
-* 0 : A condensed version of $oldGraph$ has been successfully created
-* -1 : Error at applying the operation
-*
-*/
-static int makeNewGraph(Graph* oldGraph, Graph* newGraph);
-
-static void bubbleSort(size_t *array, size_t size){
-    size_t a, b, tmp; 
-    for (a=0; a<size-1 ; a++){
-        for (b=0; b<size-a-1 ; b++){
-            if (array[b] > array[b+1]){
-                tmp = array[b];
-                array[b]=array[b+1];
-                array[b+1]=tmp;
-            }
-        }
-    }
+Graph *initGraph(){
+	Graph *g = malloc(sizeof(Graph));	
+	if(!g){
+		printf("Erreur allocation de graphe\n");
+		return NULL;
+	}
+	g->nbCommunity=0;
+	g->nbEdge=0;
+	g->nbMembers=0;
+	g->weightTot=0.0;
+   g->community=NULL;
+	return g;
 }
 
-static void deleteMatrix(double** matrix, size_t size){
-    if(!matrix)
-        return;
-    for(size_t i = 0; i<size; i++)
-        free(matrix[i]);
-    free(matrix);
-    return;
+static double power(double x, int y){
+	if (!y)
+		return x;
+	return x * power(x, y-1);
 }
 
-static double** makeAdjacencyMatrix(Graph* g){
-    if(!g)
-        return NULL;
-    size_t i, row, column;
-    Community* community;
-    Member* member;
-    //Allocating of the adjacent matrix of graph g of size $g->nbMembers$x$g->nbMembers+1$
-    double** adjMat = malloc(g->nbMembers * sizeof(double*) );
-    if(!adjMat){
-        printf("Erreur lors de l'allocation memoire pour la fonction makeAdjacencyMatrix\n");
-        return NULL;
-    }
-    for(i = 0; i < g->nbMembers; i++){
-        adjMat[i] = calloc(g->nbMembers + 1, sizeof(double));//adding an extra column for the member's community
-        if(!adjMat[i]){
-            printf("Erreur lors de l'allocation memoire pour la fonction makeAdjacencyMatrix\n");
-            return NULL;
-        }
-    }
+void deleteGraph(Graph *g){
+	if(!g)
+		return;
+	Community *pCom,*tmpCom;
+	Member* pMember, *tmpMember;
+	Edge *pEdge,*tmpEdge;
 
-    //Allocating a vector to keep in order in which the adcency matrix should be completed (more details on the report)
-    size_t* index = malloc(g->nbMembers *  sizeof(size_t));
-    if(!index){
-        printf("Erreur lors de l'allocation memoire pour la fonction makeAdjacencyMatrix\n");
-        deleteMatrix(adjMat, g->nbMembers);
-        return NULL;
-    }   
-
-    //Adding all community labels in a vector $index$
-    i=0;
-    community =  g->community;
-    while(community != NULL){
-        member = community->member;
-        while(member!=NULL){
-            index[i] = member->label;
-            member=member->next;
-            i++;
-        }
-        community = community->next;
-    }
-    //Sorting the vector $index$
-    bubbleSort(index,g->nbMembers);
-
-    //Browsing all communities
-    community =  g->community;    
-    while(community !=NULL){
-
-        //Browing all members of the community
-        member = community->member;
-        while(member != NULL){
-
-            //Browsing all neighbours of the member
-            Edge *neighbours = member->neighbours;
-
-            //Searching for the row of the adjacency matrix which corresponds to the community
-            row = 0;
-            while(member->label != index[row])
-                row++;
-            while(neighbours != NULL){
-
-                //Searching for the column of the adjacency matrix which corresponds to the community
-                column = 0;
-                while(neighbours->dest->label != index[column])
-                    column++;
-
-                //Adding the weight to the matrix
-                adjMat[row][column] = neighbours->weight;
-                neighbours = neighbours->next;
-            }
-            //Add the label of the member's community in the matrix 
-            adjMat[row][g->nbMembers] = (double)member->myCom->label;
-            member = member->next;
-        }
-        community = community->next;
-    }
-    free(index);
-    return adjMat;
+	//Delete all communities including its edges and its members
+	pCom=g->community;
+	while (pCom != NULL){
+	    pMember=pCom->member;
+	    while(pMember != NULL){
+		    pEdge=pMember->neighbours;
+		    while(pEdge != NULL){
+			    tmpEdge=pEdge;
+			    pEdge=pEdge->next;
+			    free(tmpEdge);
+			}
+		    tmpMember = pMember;
+		    pMember = pMember->next;
+		    free(tmpMember);
+		}
+		tmpCom=pCom;
+		pCom=pCom->next;
+		free(tmpCom);
+	}
+	free(g);
 }
 
-static int printGraphWithCommunities(Graph* g, double** AdjacencyMatrix, char* filename){
-    if(!g || !AdjacencyMatrix){
-        printf("Le graphe ou la matrix d'adjacence n'existe pas. (printGraphWithCommunities)\n");
-        return -1;
-    }
-    
-    FILE* fp = fopen(filename, "w");
-    if(!fp){
-        printf("Le fichier %s n'existe pas. (printGraphWithCommunities)\n",filename);
-        return -1;
-    }
-    fprintf(fp,"# nombre de communautes = %lu\n",g->nbCommunity);
-    fprintf(fp,"# nombre de membres = %lu\n",g->nbMembers);
-    fprintf(fp,"# nombre d'arcs = %lu\n",g->nbEdge);
-    fprintf(fp,"# poids de tous les arcs = %lf\n",g->weightTot);
-    fprintf(fp,"# Matrice d'adjacence | le membre de la communaute\n");
+static void displayGraph(Graph *g, bool showEdges){
+	if(!g || !g->community){
+		printf("Graphe vide\n");
+		return;
+	}
+	Community *com;
+	Member *member;
 
-    //Writing the Adjacency matrix in the file
-    for(size_t l=0; l<g->nbMembers; l++){
-        for(size_t c=0; c<g->nbMembers; c++)
-            fprintf(fp,"%lf ",AdjacencyMatrix[l][c]);
-        fprintf(fp,"| %lu",(size_t)AdjacencyMatrix[l][g->nbMembers]);//last column is the community of the member
-        fprintf(fp,"\n");//next line of file
-    }
+	printf("Nombre de communautes: %lu\n",g->nbCommunity);
+	printf("Nombre de membres: %lu\n",g->nbMembers);
+	printf("Nombre d'arcs: %lu\n",g->nbEdge);
+	printf("Poids total de tous les arcs: %lf\n \n",g->weightTot);
 
-    fclose(fp);
-    return 0;
+	printf("Format d'affichage:\n");
+	printf("Communaute: Membre(s)");
+	if(showEdges)
+		printf("\t ->Arc(s) [Poids]");
+	printf("\n");
+
+	com=g->community;
+	while(com != NULL){
+		printf("\n%lu: ",com->label);
+
+		member = com->member;
+		while(member != NULL){
+			printf("%lu",member->label);
+			if(showEdges){
+				Edge *neighbours = member->neighbours;
+				while(neighbours != NULL){
+				printf("\t->%lu [%lf]\n",neighbours->dest->label,neighbours->weight);
+				neighbours = neighbours->next;
+				}
+				if(member->next != NULL)
+					printf("\n%lu: ",com->label);
+			}
+			if(member->next != NULL && !showEdges)
+				printf(",");
+			member = member->next;
+		}
+		com = com->next;
+	}
+	printf("\n");
 }
 
-static int makeTrace(Graph* g, char* filename){
-    if(!g || !filename){
-        printf("Le graphe ou le fichier n'existe pas. (makeTrace) \n");
-        return -1;
-    }
+int addEdge(Graph *g, size_t start, size_t end, double weight){
+	if(!g){
+		printf("Impossible d'ajouter un arc car le graphe n'existe pas\n");
+		return -4;
+	}
+	Community *pComStart, *pComEnd;
+	Member* pMemberStart, *pMemberEnd;
+	Edge *pEdge;
 
-    //Creating the adjacency matrix of the graph g
-    double** adjMat = makeAdjacencyMatrix(g);   
-    if(!adjMat)
-        return -1;
+	//Searching for the member $start$
+	pMemberStart = NULL;
+	pComStart=g->community;
+	while (pComStart != NULL && !pMemberStart){
+		pMemberStart = pComStart->member;
+		while(pMemberStart != NULL && pMemberStart->label != start)
+			pMemberStart = pMemberStart->next;
+		pComStart=pComStart->next;
+	}
 
-    //Saving the graph g in a file
-    int errorCode = printGraphWithCommunities(g, adjMat, filename);
-    if(errorCode)
-        return -1;
+	if (!pMemberStart){
+		printf("Erreur! Creation d'un arc dont l'origine n'existe pas\n");
+		return -1;
+	}
 
-    deleteMatrix(adjMat,g->nbMembers);
-    return 0;
+	//Searching for the member $end$
+	pMemberEnd = NULL;
+	pComEnd=g->community;
+	while (pComEnd != NULL && !pMemberEnd){
+		pMemberEnd = pComEnd->member;
+		while(pMemberEnd!=NULL && pMemberEnd->label != end){
+			pMemberEnd = pMemberEnd->next;
+		}
+		pComEnd=pComEnd->next;
+	}
+
+	if (!pMemberEnd){
+		printf("Erreur! Creation d'un arc dont la destination n'existe pas\n");
+		return -1;
+	}
+
+	//Allocating an edge
+	pEdge=(Edge *) malloc(sizeof(Edge));
+	if (!pEdge){
+		printf("Erreur! Memoire insuffisante pour creer un arc\n");
+		return -3;
+	}
+
+	//Initialisation of an edge from $start$ to $end$
+	pEdge->weight = weight;
+	pEdge->dest = pMemberEnd;
+	pEdge->next = pMemberStart->neighbours; //Adding at the beginning of the neighbours of $start$
+	pMemberStart->neighbours = pEdge;
+
+	//Updating the community due to the addition of the edge
+	pMemberStart->weightMember += weight;
+	pMemberStart->myCom->weightTot += weight;
+
+	//If the edge is a loop, the weight are doubled
+   if(start == end){
+		pMemberStart->myCom->weightInt += 2*weight;
+		pMemberStart->myCom->weightTot += weight;
+		g->weightTot += weight;
+	}
+
+	//Updating the graph
+	g->weightTot += weight;
+	g->nbEdge++;
+	return 0;
 }
 
-static size_t findIndex(Graph* g, size_t communityLabel, LinksToCommunity* communityConnections){
-    //Finding the index of $communityConnections$ which corresponds to the $communityLabel$
-    size_t i = 0;
-    while(communityConnections[i].destCommunityLabel != communityLabel && i < g->nbCommunity)
-        i++;
-    if(i == g->nbCommunity)
-        printf("L'index pas trouve. (findIndex)\n");
-    return i;
+int addCommunity(Graph *g){
+	if(!g){
+		printf("Impossible d'ajouter une communaute car le graphe n'existe pas\n");
+		return -2;
+	}
+	Member *member;
+	Community *community;
+
+
+	//Allocating new community
+	community=(Community *) malloc(sizeof(Community));
+	if (!community){
+		printf("Erreur! Memoire insuffisante pour creer une community\n");
+		return -1;
+	}
+
+	//Allocating new member
+	member=(Member *) malloc(sizeof(Member));
+	if (!member){
+		free(community);
+		printf("Erreur! Memoire insuffisante pour creer un membre\n");
+		return -1;
+	}
+
+	//Updating number of communities and members of the graph
+	g->nbCommunity++;
+	g->nbMembers++;
+
+	//Initialisation of the member
+	member->label = g->nbMembers;
+	member->neighbours = NULL;
+	member->weightMember = 0.0;
+	member->next = NULL;
+	member->previous = NULL;
+	member->myCom = community;
+
+	//Initialisation of the community and adding the member in it
+	community->label = g->nbCommunity;
+	community->weightTot = 0.0;
+	community->weightInt = 0.0;
+	community->member=member;
+	community->previous =NULL;
+	community->next=g->community;
+
+	//Adding the new community at the beginning of the list
+	if(g->community != NULL)
+		g->community->previous = community;
+	g->community = community;
+	return 0;
+
 }
 
-static void condenseLinksBetweenCommunities(Graph* g, Community* community, LinksToCommunity* communityConnections){
-    if(!g || !community || !communityConnections){
-        printf("Le graphe ou la communauté n'existe pas. (condenseLinksBetweenCommunities)\n");
-        return;
-    }
+static void deleteCommunity(Graph *g, Community* community){
+	if(!g || !community){
+		printf("The graph or the community does not exist.\n");
+		return;
+	}
 
-    //Browsing all members of the community
-    Member* member = community->member;
-    while(member != NULL){
-        //Browsing all neightbours of the member
-        Edge* neighbours = member->neighbours;
-        while(neighbours != NULL){
-            //Adding the weights of all links toward other communities
-            communityConnections[findIndex(g, neighbours->dest->myCom->label, communityConnections)].weight += neighbours->weight;
-            neighbours = neighbours->next;
-        }
-        member = member->next;
-    }
-    return;
+	//If unique community
+	if(!community->previous && !community->next)
+		g->community = NULL;
+	else{
+		//If first community of the list
+		if(!community->previous){
+			g->community = community->next;
+			community->next->previous = NULL;
+		}
+		else{
+			//If last community of the list		
+			if(!community->next)
+				community->previous->next = community->next;
+			//If middle community of the list
+			else{
+				community->previous->next = community->next;
+				community->next->previous = community->previous;
+			}
+		}
+	}
+	g->nbCommunity--;
+	free(community);
 }
 
-static int makeNewGraph(Graph* oldGraph, Graph* newGraph){
-    if(!oldGraph || !newGraph){
-        printf("L'un des graphes n'existe pas. (makeNewGraph)\n");
-        return -1;
-    }
+static void deleteMemberFromCommunity(Graph *g, Member *member){
+	if(!g || !member){
+		printf("The graph or the member does not exist.\n");
+		return;
+	}
+	double weightIn;
 
-    int errorCode = 0;
-    size_t i;
-    Community *oldGraphCom, *newGraphCom;
-    LinksToCommunity *communityConnections;
-
-    //Create the numbers of communities needed for the new graph $newGraph$
-    for(size_t i = 0; i<oldGraph->nbCommunity; i++){
-        errorCode = addCommunity(newGraph);
-        if(errorCode){
-            printf("Erreur lors de l'ajout d'une communaute. (makeNewGraph)\n");
-            deleteGraph(newGraph);
-            return -1;
-        }
-    }
-
-    //Match the label of the new communities and new members with the label of those from the previous graph
-    oldGraphCom = oldGraph->community;
-    newGraphCom = newGraph->community;
-    while(oldGraphCom !=NULL){
-        newGraphCom->label = oldGraphCom->label;
-        newGraphCom->member->label = oldGraphCom->label;
-        oldGraphCom = oldGraphCom->next;
-        newGraphCom = newGraphCom->next;
-    }
-
-    //Allocate an array of type $communityConnections$
-    oldGraphCom = oldGraph->community;
-    newGraphCom = newGraph->community;
-    communityConnections = malloc(oldGraph->nbCommunity * sizeof(LinksToCommunity));
-    if(!communityConnections){
-        printf("Erreur d'allocation de memoire. (makeNewGraph)\n");
-        return -1;
-    }
-
-    //Saving all community labels of the new graph in an array of type $communityConnections$
-    size_t j = newGraph->nbCommunity-1;
-    while(newGraphCom != NULL){
-        communityConnections[j].destCommunityLabel = newGraphCom->label; 
-        newGraphCom = newGraphCom->next;
-        j--;
-    }
-
-    newGraphCom = newGraph->community;
-    while(oldGraphCom != NULL){
-        //Resetting all weight connections
-        for(i = 0; i < newGraph->nbCommunity ; i++)
-            communityConnections[i].weight = 0;
-
-        //Initialise the array which contains the sum of the weight of all links between the community $oldGraphCom$ and the others
-        condenseLinksBetweenCommunities(oldGraph, oldGraphCom, communityConnections);
-
-        //Create edges between the community $newGraphCom$ and all the others
-        for(i = newGraph->nbCommunity-1; (newGraph->nbCommunity+i) >= newGraph->nbCommunity; i--)
-            addEdge(newGraph,newGraphCom->member->label, communityConnections[i].destCommunityLabel, communityConnections[i].weight);
-
-        oldGraphCom = oldGraphCom->next;
-        newGraphCom = newGraphCom->next;       
-    }
-    free(communityConnections);
-    deleteGraph(oldGraph);
-    return 0;
+	//If unique member, then we delete community
+	if(!member->previous && !member->next){
+		member->myCom->member = NULL;
+		deleteCommunity(g, member->myCom);
+	}
+	//If the member is not unique, then we just take it off
+	else{
+		//If first member from the list
+		if(!member->previous){
+			member->next->previous = NULL;
+			member->myCom->member = member->next;
+		}
+		else{
+			//If last member from the list
+			if(!member->next)
+				member->previous->next = NULL;
+			//If middle member from the list
+			else{
+			member->previous->next = member->next;
+			member->next->previous = member->previous;
+			}
+		}
+		//Taking the weights off the community due to the calling off
+		weightIn = weightToCommunity(member, member->myCom->label);
+		member->myCom->weightTot -= (member->weightMember - weightIn);        
+		member->myCom->weightInt -= weightIn;
+	}
 }
 
-Graph* communityAggregation(Graph* oldGraph, char* filename){
-    if(!oldGraph)
-        return NULL;
+static void changeMemberToCommunity(Graph *g, Member* member, Community* community){
+	if(!g || !member || !community){
+		printf("Preconditions non respectees pour changeMemberToCommunity, communaute inchangee\n");
+		return;
+	}
 
-    int errorCode = 0;
-    errorCode = makeTrace(oldGraph,filename);
-    if(errorCode){
-        deleteGraph(oldGraph);
-        return NULL;
-    }
+	//If member is already in the community then we do nothing
+	if(member->myCom->label == community->label)
+		return;
 
-    Graph* newGraph= initGraph();
-    if(!newGraph){
-        printf("Erreur lors de l'allocation de memoire d'un nouveau graphe.(communityAggregation)\n");
-        deleteGraph(oldGraph);
-        return NULL;
-    }
+	//Taking the member off its community
+	deleteMemberFromCommunity(g,member);
 
-    errorCode = makeNewGraph(oldGraph, newGraph);
-    if(errorCode){
-        deleteGraph(oldGraph);
-        deleteGraph(newGraph);
-        return NULL;
+	//Addingg the member in the new community
+	member->myCom = community;
+	member->next = community->member;
+	member->previous = NULL;
+	community->member->previous = member;
+	community->member = member;
+
+	//Updating the weight of the new community
+	double weightIn;
+	weightIn = weightToCommunity(member,community->label);
+	community->weightInt += weightIn;
+	community->weightTot += (member->weightMember - weightIn);
+
+	return;
+}
+
+static double weightToCommunity(Member* member, size_t label){
+	if(!member){
+		printf("Le membre n'existe pas (weightToCommunity)\n");
+		return 0;
+	}
+   Edge* pNeighbours;
+   double weightToCommunity;
+	
+	//Browsing all neightbours of the member
+	pNeighbours	= member->neighbours;
+	weightToCommunity = 0.0;
+   while(pNeighbours != NULL){
+		if(pNeighbours->dest->myCom->label == label)
+			weightToCommunity += pNeighbours->weight;
+		pNeighbours = pNeighbours->next;
+   }
+
+   return weightToCommunity;
+}
+
+static double gainModularity(Graph* g, Member* member, Community* com){
+	if(!g || !com || !member){
+		printf("Preconditions non respectees pour gainModularity\n");
+		return 0;
+	}
+   double weightTot;
+   double comWeightInt, comWeightExt;
+   double memberWeight, memberWeightCom;
+   Member* pMember;
+   Edge* pNeightbours;
+
+	//sum of the weight of the links inside the community $com$
+	comWeightInt = com->weightInt;
+	
+	//sum of the weight of the links incident to members of the community $com$
+	comWeightExt = com->weightTot;
+
+	//sum of the weight of all links originated from $member$
+	memberWeight = member->weightMember;
+
+	//sum of the weight of the links from $member$ to members of the community $com$
+	memberWeightCom = weightToCommunity(member, com->label);
+
+   //sum of the weight of all links of the graph
+   weightTot = g->weightTot;
+
+	//Calculating the gain of modularity
+   double t1 = (comWeightInt + memberWeightCom)/(weightTot);
+   double t2 = (comWeightExt + memberWeight)/(weightTot);
+   double t3 = t1 - (t2 * t2);
+
+   double s1 = (comWeightExt/(weightTot))*(comWeightExt/(weightTot));
+   double s2 = (memberWeight/(weightTot))*(memberWeight/(weightTot));
+   double s3 = (comWeightInt/(weightTot))-s1-s2;
+
+   return (t3 - s3);
+}
+
+static void modularityOptimisation(Graph* g){
+	if(!g)
+		return;
+	Community *pCom, *pComNext,*pNewCom;
+	Member *pMember, *pMemberNext;
+	Edge *pNeighbours;
+	bool has_imp;
+	double maxQ, q;
+
+
+	//Browsing each community
+	pCom = g->community;
+	for(size_t i=1; i <= g->nbCommunity; i++){
+		if(!pCom)
+			pCom = g->community;
+		maxQ = 0.0;
+		has_imp = false;
+
+		//Browsing each member of the community
+		pMember = pCom->member;
+		while (pMember != NULL){
+
+			//Browsing each neightours of the member
+			pNeighbours = pMember->neighbours;
+			while(pNeighbours != NULL){
+
+				//Calculating the gain modularity if the member $pMember$ was in its neighbours' community
+				q = gainModularity(g, pMember, pNeighbours->dest->myCom);
+				if (maxQ < q) {
+					maxQ = q;
+					pNewCom = pNeighbours->dest->myCom;
+					has_imp = true;
+				}
+				pNeighbours = pNeighbours->next;
+			}
+
+			//(pMember might be in other community or pCom might be deleted)
+			//Keeping the order of the browsing
+			pMemberNext = pMember->next;
+			pComNext = pCom->next;
+			if(has_imp && pMember->myCom->label != pNewCom->label){
+				changeMemberToCommunity(g, pMember, pNewCom);
+				i = 0;//If a member has changed of community, then we have to recheck all communities
+			}
+			pMember = pMemberNext;
+		}
+		pCom = pComNext;
+	}
+}
+
+static int readFile(char *filename, Graph *g){
+	if(!g){
+		printf("Le graphe doit être alloue avant de lire le fichier\n");
+		return -1;
+	}
+	FILE *fp;
+	char line[MAX+1];
+	int i,j,nbS1,nbLine,member,nbEdge,createEdge;
+	double weight;
+
+	//Open the file in read mode
+	fp=fopen(filename,"r");
+	if(!fp){
+		printf("Le fichier %s n'existe pas.\n",filename);
+		return -2;
+	}
+
+	nbLine=0;
+	member=0;
+	nbS1=0;
+ 	while(fgets(line,MAX,fp) != NULL){
+		//Counting the number of lines in the file
+		nbLine++;
+		//Denying all empty lines
+		if (line[0] != '\n'){
+			i=0;
+			//Check the number of all nodes given by the first line
+			if (!nbS1){
+				nbS1=1;
+				while (line[i] != '\n'){
+						if (line[i] == ',')
+							nbS1++;
+						i++;
+				}
+				for (j=1; j<=nbS1; j++){
+					addCommunity(g);
+				}
+				//Reading the first line again
+				i=0;
+			}
+			//The current node and the origin of the links
+			member++; 
+			//The number of edges created
+			nbEdge=0;
+			while (line[i] != '\n'){
+				weight=0;
+				createEdge=1;
+				//Reading the number for the weight of the link
+				while (line[i] != ',' && line[i] != '\n'){
+					while (line[i]==' ' || line[i]=='\t')
+						i++;
+					//If no numbers, then delete
+					if ((line[i]>'9' || line[i]<'0') && line[i]!='x'){
+						printf("Erreur a la line %d !\n",nbLine);
+						deleteGraph(g);
+						return -1;
+					}
+					if (line[i]=='x')
+						createEdge=0;
+
+					weight=10*weight+line[i]-'0';
+					i++;
+					if(line[i] == '.'){
+						i++;
+						int dec = 0;
+						while(line[i] != ',' && line[i] != '\n' && line[i] != 13){
+							weight += ((line[i]-'0')/ power(10,dec) );
+							dec++;
+							i++;
+						}
+					}
+					while (line[i]==' ' || line[i]=='\t' || line[i] == 13)
+						i++;
+				}
+				if (line[i] == ',')
+					i++;
+				nbEdge++;
+				if (nbEdge<=nbS1 && createEdge==1)
+					addEdge(g,member,nbEdge,weight);
+			}
+			if (nbEdge != nbS1){
+				printf("Erreur a la line %d !\n",nbLine);
+				deleteGraph(g);
+				return -1;
+			}
+		}
     }
-    return newGraph;
+	fclose(fp);
+	return 0;
+}
+
+int main(int argc, char *argv[]){
+	bool showEdges, hasImproved;
+	int error;
+	unsigned int nbPass;
+	char deleteFilename[MAX_NAME], filename[MAX_NAME];
+	size_t prevNbCom;
+
+	//Verifying the number of arguments given in the command line
+	if(argc != 3){
+		printf("Le nombre d'arguments de la commande est incorrect.\n");
+		return 0;
+	}
+
+	//Checking the thrid input to determine how to show the graph
+	if(strcmp(argv[2],"true") || strcmp(argv[2],"True"))
+		showEdges = true;
+	else
+		if(strcmp(argv[2],"False") || strcmp(argv[2],"False"))
+			showEdges = false;
+		else{
+			printf("%s n'est pas un booleen.\n",argv[2]);
+			return 0;
+		}
+
+	//Allocatating and initialisation of a graph
+   Graph *g = initGraph();
+   if(!g){
+		printf("Erreur allocation de mémoire pour le graphe.\n");
+   	return -1;
+	}
+
+	//Creating the graph described in the file
+   error = readFile(argv[1],g);
+	if(error != 0){
+		printf("Erreur lors de la lecture du fichier.\n");
+		deleteGraph(g);
+		return -1;
+	}
+
+	//Deleting all files in the folder 'Pass'
+	nbPass = 1;
+	sprintf(deleteFilename, "./Pass/pass%u.txt", nbPass);
+	while(remove(deleteFilename) != -1){
+		nbPass++;
+		sprintf(deleteFilename, "./Pass/pass%u.txt", nbPass);
+	}
+
+	//Creating the folder 'Pass'
+   mkdir("Pass", S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
+
+	//Applying the "pass" operation described in the article.
+	nbPass=0;
+	hasImproved = true;
+	while(hasImproved){
+		prevNbCom = g->nbCommunity;
+
+		//Applying modularity optimisation
+		modularityOptimisation(g);
+
+		//Verifying if any modularity optimisation occured
+		if(prevNbCom > g->nbCommunity){
+			nbPass++;
+			hasImproved = true;
+			printf("Pass %d \n \n",nbPass);
+			printf("<Optimisation de la modularity> effectue\n \n");
+
+			//Applying community aggregation
+		   sprintf(filename, "./Pass/pass%u.txt", nbPass);
+			g = communityAggregation(g,filename);
+			printf("<Regroupement des communautes> effectue\n \n");
+
+			//Showing the graph
+			displayGraph(g,showEdges);
+		}
+		else
+			hasImproved = false;
+
+	}
+	printf("\n Nombre de <pass> effectues: %u\n",nbPass);
+	deleteGraph(g);
+   return 0;
 }

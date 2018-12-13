@@ -1,11 +1,25 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include "pass.h"
 
 typedef struct{
     double weight; 
     size_t destCommunityLabel;
 }LinksToCommunity;
+
+void bubbleSort(size_t *array, size_t size){
+    size_t a, b, tmp; 
+    for (a = 0 ; a < size-1; a++){
+        for (b = 0 ; b < size-a-1; b++){
+            if (array[b] > array[b+1]){
+                tmp = array[b];
+                array[b]=array[b+1];
+                array[b+1]=tmp;
+            }
+        }
+    }
+}
 
 static double** makeAdjacenceMatrix(Graph* g){
     if(!g)
@@ -16,43 +30,70 @@ static double** makeAdjacenceMatrix(Graph* g){
     if(!adjMat)
         return NULL;
 
-    for(size_t i = 0; i < g->nbMembers; i++){
+    size_t i;
+    for(i = 0; i < g->nbMembers; i++){
         adjMat[i] = calloc(g->nbMembers + 1, sizeof(double));//adding an extra column for the member's community
         if(!adjMat[i])
             return NULL;
     }
-    
-    Community* community =  g->community;    
-    //Browsing all communities
-    while(community !=NULL){
-        Member* member = community->member;
-        //Browing all members of the community
-        while(member != NULL){
-            Edge *neighbours = member->neighbours;
-            //Browsing all neighbours of the member
-            while(neighbours != NULL){
-                //Adding the weight to the matrix
-                adjMat[(member->label-1)][(neighbours->dest->label-1)] = neighbours->weight;
-                neighbours = neighbours->next;
-            }
-            //Add the label of the member's community in the matrix 
-            adjMat[(member->label-1)][g->nbMembers] = (double)member->myCom->label;
-            member = member->next;
+    size_t* index = malloc(g->nbMembers *  sizeof(size_t));
+    if(!index)
+        //free mat
+        return NULL;    
+    Community* community =  g->community;
+    Member* member;
+
+    i=0;
+    while(community != NULL){
+        member = community->member;
+        while(member!=NULL){
+            index[i] = member->label;
+            member=member->next;
+            i++;
         }
         community = community->next;
     }
+    bubbleSort(index,g->nbMembers);
+    for(i=0;i<g->nbMembers-1;i++)
+        if(index[i]>index[i+1])
+            printf("nopeeeeeeee index pas trie\n");
+    //Browsing all communities
+    community =  g->community;    
+    while(community !=NULL){
+        //Browing all members of the community
+        member = community->member;
+        while(member != NULL){
+            //Browsing all neighbours of the member
+            Edge *neighbours = member->neighbours;
+            
+            size_t row = 0;
+            while(member->label != index[row])
+                row++;
+            while(neighbours != NULL){
+                //Adding the weight to the matrix
+                size_t column = 0;
+                while(neighbours->dest->label != index[column])
+                    column++;
+                adjMat[row][column] = neighbours->weight;
+                neighbours = neighbours->next;
+            }
+            //Add the label of the member's community in the matrix 
+            adjMat[row][g->nbMembers] = (double)member->myCom->label;
+            member = member->next;
 
+        }
+        community = community->next;
+    }
     return adjMat;
 }
 
-static int printGraphWithCommunities(Graph* g, double** AdjacenceMatrix){// we are maybe going to need the number of the pass to give different file names to the matrix printouts.
+static int printGraphWithCommunities(Graph* g, double** AdjacenceMatrix, char* filename){
     if(!g || !AdjacenceMatrix)
         return -1;
     
-    FILE* fp = fopen("filename.txt", "w");//filename to be changed
+    FILE* fp = fopen(filename, "w");
     if(!fp)
         return -1;
-
     fprintf(fp,"# number of communities = %lu\n",g->nbCommunity);
     fprintf(fp,"# number of members = %lu\n",g->nbMembers);
     fprintf(fp,"# number of edges = %lu\n",g->nbEdge);
@@ -71,7 +112,7 @@ static int printGraphWithCommunities(Graph* g, double** AdjacenceMatrix){// we a
     return 0;
 }
 
-static int makeTrace(Graph* g){
+static int makeTrace(Graph* g, char* filename){
     if(!g)
         return -1;
 
@@ -79,7 +120,7 @@ static int makeTrace(Graph* g){
     if(!adjMat)
         return -1;
 
-    int errorCode = printGraphWithCommunities(g, adjMat);
+    int errorCode = printGraphWithCommunities(g, adjMat, filename);
     if(errorCode)
         return -1;
 
@@ -126,7 +167,7 @@ static void condenseLinksBetweenCommunities(Graph* g, Community* community, Link
     return;
 }
 
-static int makenewGraphraph(Graph* oldGraph, Graph* newGraph){
+static int makenewGraph(Graph* oldGraph, Graph* newGraph){
     if(!oldGraph || !newGraph)
         return -1;
 
@@ -184,17 +225,17 @@ static int makenewGraphraph(Graph* oldGraph, Graph* newGraph){
     }
     free(communityConnections);
     deleteGraph(oldGraph);
-
     return 0;
 }
 
-Graph* pass(Graph* oldGraph){
+Graph* pass(Graph* oldGraph, unsigned int nbPass){
     if(!oldGraph)
         return NULL;
 
+    char filename[100];
+    sprintf(filename, "./Pass/pass%u.txt", nbPass);
     int errorCode = 0;
-    errorCode = makeTrace(oldGraph);
-
+    errorCode = makeTrace(oldGraph,filename);
     if(errorCode){
         deleteGraph(oldGraph);
         return NULL;
@@ -206,12 +247,11 @@ Graph* pass(Graph* oldGraph){
         return NULL;
     }
 
-    errorCode = makenewGraphraph(oldGraph, newGraph);
+    errorCode = makenewGraph(oldGraph, newGraph);
     if(errorCode){
         deleteGraph(oldGraph);
         deleteGraph(newGraph);
         return NULL;
     }
-
     return newGraph;
 }

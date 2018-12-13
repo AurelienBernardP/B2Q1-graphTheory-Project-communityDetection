@@ -1,9 +1,14 @@
-#if defined(GRAPHES_H)
+#if defined(OPTIMISATION_H)
 #else
-#define GRAPHES_H
+#define OPTIMISATION_H
 
-//Max == 10000 caracteres par ligne
+//The limit number of charaters per line inside the file
+//which describes the graph.
 #define MAX 10000
+
+//The number of characters to describe the path to the
+//files which contains the trace of all previous pass.
+#define MAX_NAME 50
 
 typedef struct community Community;
 typedef struct edge Edge;
@@ -44,39 +49,55 @@ struct graph{
 	Community *community;
 };
 
-/*
-Alloue et initialise le graphe
-
+/* initGraph
+*Allocate and initialise a graph 
+*
+*[return]
+* g: an initialised graph
+* NULL: error to allocate memory for a graph
 */
 Graph *initGraph();
 
-//Supprime le graphe en entier
-void deleteGraph(Graph *);
 
-/*
-Ajout au debut de la liste $community$ une nouvelle Communaute qui possede
-un unique membre.
+/* deleteGraph
+* Delete all allocated memory for the graph
+*
+*[input]
+* g: a graph
+*
+*/
+void deleteGraph(Graph *g);
 
-input: g->un graphe initialise
-return : 0 si succes
-		 -1 si memoire insuffisante pour allocation
-		 -2 si precondition(s) non-respectee(s)
+/* addCommunity
+* Add a community with an unique member at the beginning of the communities of graph $g$
+*
+* [input]
+* g : an initialised graph
+*
+* [return]
+* 0 : a community has been added to g successfully
+* -1 : Error at allocating memory for this operation
+* -2 : the graph g does not exist
+*
 */
 int addCommunity(Graph *g);
 
-/*
-Ajout d'un arc de $start$ vers $end$ et de poids $weight$.
-
-input: g : un graphe deja initialise
-	  start: la communaute d'origine de l'arc (0 < start < g->nbCommunity+1)
-	  end: la communaute de destination de l'arc (0 < end < g->nbCommunity+1)
-	  weight : le poids de cet arc ( weight != 0)
-
-return: 0 si succes
-		-1 si la communaute d'origine n'existe pas
-		-2 si la communaute de destination n'existe pas
-		-3 si erreur allocation
-		-4 si precondition(s) non respectee(s)
+/* addEdge
+* Add an edge from $start$ to $end$ with a weight of $weight$
+*
+*[input]
+* g : an initialised graph which contains the nodes $start$ and $end$
+* start : a node of the graph g
+* end : a node of the graph g
+* weight : the weight of the link between $start$ and $end$
+*
+*[return]
+* 0 : the edge has been added to g successfully
+* -1 : the origin of the edge doesn't exist (start is not a node of g)
+* -2 : the destination of the edge doesn't exist (end is not a node of g)
+* -3 : Error at allocating memory for this operation
+* -4 : the graph is empty
+*
 */
 int addEdge(Graph *g, size_t a, size_t b, double weight);
 

@@ -1,6 +1,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
+#include <sys/stat.h>
+
+
 #include "graphes.h"
 #include "pass.h"
 
@@ -42,6 +45,8 @@ static void deleteMemberFromCommunity(Graph *g, Member *member);
 
 static double gainModularity(Graph* g, Member* member, Community* com);
 
+static double power( double x, int y);
+
 Graph *initGraph(){
    Graph *g = malloc(sizeof(Graph));	
 	if(g == NULL)
@@ -52,6 +57,12 @@ Graph *initGraph(){
 	g->weightTot=0.0;
    g->community=NULL;
 	return g;
+}
+
+static double power( double x, int y){
+	if (!y)
+		return x;
+	return x * power( x, y - 1);
 }
 
 void deleteGraph(Graph *g){
@@ -512,9 +523,19 @@ static int readFile(char *filename, Graph *g){
 					}
 					if (line[i]=='x')
 						createEdge=0;
+
 					weight=10*weight+line[i]-'0';
 					i++;
-					while (line[i]==' ' || line[i]=='\t')
+					if(line[i] == '.'){
+						i++;
+						int dec = 0;
+						while(line[i] != ',' && line[i] != '\n' && line[i] != 13){
+							weight += ((line[i]-'0')/ power(10,dec) );
+							dec++;
+							i++;
+						}
+					}
+					while (line[i]==' ' || line[i]=='\t' || line[i] == 13)
 						i++;
 				}
 				if (line[i] == ',')
@@ -552,12 +573,34 @@ int main(int argc, char *argv[]){
 			g->community = com;
    	com = com->previous;
 	}
-   showGraph(g, false);
-	stepOne(g);
-	printf("\n \n <Optimisation de la modularity> effectue\n \n");
-	showGraph(g,true);
-	g = pass(g);
-   showGraph(g,true);
+	bool hasImproved = true;
+	unsigned int nbPass = 1;
+	char filenames[100];
+	sprintf(filenames, "./Pass/pass%u.txt", nbPass);
+	while(remove(filenames) != -1){
+		nbPass++;
+		sprintf(filenames, "./Pass/pass%u.txt", nbPass);
+	}
+	
+   mkdir("Pass", S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
+
+	nbPass=0;
+	while(hasImproved){
+		hasImproved = false;
+		size_t prevNbCom = g->nbCommunity;
+		stepOne(g);
+
+		if(prevNbCom > g->nbCommunity){
+			printf("\n \n <Optimisation de la modularity> effectue\n");
+			hasImproved = true;
+			nbPass++;
+			g = pass(g,nbPass);
+			printf("\n \n <Regroupement des communautés> effectue\n");
+			showGraph(g,false);
+		}
+		prevNbCom = g->nbCommunity;
+	}
+	printf("Nombre de <pass> effectues: %u\n",nbPass);
 	deleteGraph(g);
 	free(g);
    return 0;

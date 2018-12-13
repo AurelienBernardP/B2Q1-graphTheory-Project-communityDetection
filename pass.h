@@ -4,6 +4,6 @@
 
 #include "graphes.h"
 
-Graph* pass(Graph* oldG);
+Graph* pass(Graph* oldG,unsigned int passNumber);
 
 #endif

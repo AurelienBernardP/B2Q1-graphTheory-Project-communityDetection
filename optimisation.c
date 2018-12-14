@@ -89,7 +89,7 @@ static void deleteMemberFromCommunity(Graph *g, Member *member);
 * com : a community of graph g
 *
 * [return]
-* (>=0) or (< 0) : the gain of modularity
+* [-1;1] : the gain of modularity
 *
 */
 static double gainModularity(Graph* g, Member* member, Community* com);
@@ -112,8 +112,12 @@ static double power(double x, int y);
 * [input]
 * g : an initialised graph
 *
+* [return]
+* true : the communities of g have changed
+* false : the communities of g haven't changed
+*
 */
-static void modularityOptimisation(Graph* g);
+static bool modularityOptimisation(Graph* g);
 
 Graph *initGraph(){
 	Graph *g = malloc(sizeof(Graph));	
@@ -453,9 +457,6 @@ static double gainModularity(Graph* g, Member* member, Community* com){
    double weightTot;
    double comWeightInt, comWeightExt;
    double memberWeight, memberWeightCom;
-   Member* pMember;
-   Edge* pNeightbours;
-
 	//sum of the weight of the links inside the community $com$
 	comWeightInt = com->weightInt;
 	
@@ -483,16 +484,16 @@ static double gainModularity(Graph* g, Member* member, Community* com){
    return (t3 - s3);
 }
 
-static void modularityOptimisation(Graph* g){
+static bool modularityOptimisation(Graph* g){
 	if(!g)
-		return;
+		return false;
 	Community *pCom, *pComNext,*pNewCom;
 	Member *pMember, *pMemberNext;
 	Edge *pNeighbours;
-	bool has_imp;
+	bool has_imp, has_changed;
 	double maxQ, q;
 
-
+	has_changed = false;
 	//Browsing each community
 	pCom = g->community;
 	for(size_t i=1; i <= g->nbCommunity; i++){
@@ -524,6 +525,7 @@ static void modularityOptimisation(Graph* g){
 			pMemberNext = pMember->next;
 			pComNext = pCom->next;
 			if(has_imp && pMember->myCom->label != pNewCom->label){
+				has_changed = true;
 				changeMemberToCommunity(g, pMember, pNewCom);
 				i = 0;//If a member has changed of community, then we have to recheck all communities
 			}
@@ -531,6 +533,7 @@ static void modularityOptimisation(Graph* g){
 		}
 		pCom = pComNext;
 	}
+	return has_changed;
 }
 
 static int readFile(char *filename, Graph *g){
@@ -625,7 +628,7 @@ static int readFile(char *filename, Graph *g){
 }
 
 int main(int argc, char *argv[]){
-	bool showEdges, hasImproved;
+	bool showEdges, hasChanged;
 	int error;
 	unsigned int nbPass;
 	char deleteFilename[MAX_NAME], filename[MAX_NAME];
@@ -663,7 +666,7 @@ int main(int argc, char *argv[]){
 		return -1;
 	}
 
-	//Deleting all files in the folder 'Pass'
+	//Deleting all previously created trace files in the folder 'Pass'
 	nbPass = 1;
 	sprintf(deleteFilename, "./Pass/pass%u.txt", nbPass);
 	while(remove(deleteFilename) != -1){
@@ -674,21 +677,20 @@ int main(int argc, char *argv[]){
 	//Creating the folder 'Pass'
    mkdir("Pass", S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
 
-	//Applying the "pass" operation described in the article.
+	//Applying the method described in the article
 	nbPass=0;
-	hasImproved = true;
-	while(hasImproved){
+	hasChanged = true;
+	while(hasChanged){
 		prevNbCom = g->nbCommunity;
 
 		//Applying modularity optimisation
-		modularityOptimisation(g);
+		hasChanged = modularityOptimisation(g);
 
 		//Verifying if any modularity optimisation occured
-		if(prevNbCom > g->nbCommunity){
+		if(hasChanged){
 			nbPass++;
-			hasImproved = true;
 			printf("Pass %d \n \n",nbPass);
-			printf("<Optimisation de la modularity> effectue\n \n");
+			printf("<Optimisation de la modularité> effectue\n \n");
 
 			//Applying community aggregation
 		   sprintf(filename, "./Pass/pass%u.txt", nbPass);
@@ -698,8 +700,6 @@ int main(int argc, char *argv[]){
 			//Showing the graph
 			displayGraph(g,showEdges);
 		}
-		else
-			hasImproved = false;
 
 	}
 	printf("\n Nombre de <pass> effectues: %u\n",nbPass);

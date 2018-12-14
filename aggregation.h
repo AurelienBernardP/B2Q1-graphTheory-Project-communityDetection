@@ -2,7 +2,6 @@
 #else
 #define AGGREGATION_H
 
-#include "optimisation.h"
 
 /* communityAggregation
 * Create a new file in $filename$ which keeps a trace of a graph $oldG$

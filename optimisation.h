@@ -56,7 +56,7 @@ struct graph{
 * g: an initialised graph
 * NULL: error to allocate memory for a graph
 */
-Graph *initGraph();
+Graph *initGraph(void);
 
 
 /* deleteGraph

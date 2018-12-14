@@ -24,9 +24,9 @@ struct edge {
 
 
 struct member {
-   Community *myCom;
    size_t label;
    double weightMember;
+   Community *myCom;
    Edge *neighbours;
    Member *previous;
    Member *next;

@@ -69,7 +69,8 @@ Graph *initGraph();
 void deleteGraph(Graph *g);
 
 /* addCommunity
-* Add a community with an unique member at the beginning of the communities of graph $g$
+* Add a community with an unique member at the beginning of the communities 
+* of graph $g$
 *
 * [input]
 * g : an initialised graph

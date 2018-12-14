@@ -23,7 +23,7 @@ static void deleteCommunity(Graph *g, Community* community);
 *
 * [input]
 * g: a graph
-* showEdges: a boolean which indicates if all edges must be displayed
+* showEdges: a boolean which indicates if all edges must be displayed or not
 *
 */
 static void displayGraph(Graph *g, bool showEdges);
@@ -33,10 +33,10 @@ static void displayGraph(Graph *g, bool showEdges);
 *
 * [input]
 * filename : the name of the file which describes a graph
-* g : an initialised empTY graph
+* g : an initialised empty graph
 *
 * [return]
-* 0 : The graph described in the file $filename$ is successfully created
+* 0 : The graph described in the file $filename$ has been successfully created
 * -1 : The format of the file $filename$ is incorrect.
 * -2 : The file $filename$ does not exist.
 *
@@ -107,7 +107,7 @@ static double gainModularity(Graph* g, Member* member, Community* com);
 static double power(double x, int y);
 
 /* modularityOptimisation
-* Applying modularity optimisation (described in the article).
+* Applying a local modularity optimisation.
 *
 * [input]
 * g : an initialised graph
@@ -165,6 +165,7 @@ void deleteGraph(Graph *g){
 		pCom=pCom->next;
 		free(tmpCom);
 	}
+
 	free(g);
 }
 
@@ -249,7 +250,7 @@ int addEdge(Graph *g, size_t start, size_t end, double weight){
 
 	if (!pMemberEnd){
 		printf("Erreur! Creation d'un arc dont la destination n'existe pas\n");
-		return -1;
+		return -2;
 	}
 
 	//Allocating an edge
@@ -336,7 +337,7 @@ int addCommunity(Graph *g){
 
 static void deleteCommunity(Graph *g, Community* community){
 	if(!g || !community){
-		printf("The graph or the community does not exist.\n");
+		printf("Le graphe ou la communaute n'existe pas.(deleteCommunity)\n");
 		return;
 	}
 
@@ -366,7 +367,7 @@ static void deleteCommunity(Graph *g, Community* community){
 
 static void deleteMemberFromCommunity(Graph *g, Member *member){
 	if(!g || !member){
-		printf("The graph or the member does not exist.\n");
+		printf("Le graphe ou le membre n'existe pas (deleteMemberFromCommunity).\n");
 		return;
 	}
 	double weightIn;
@@ -538,7 +539,7 @@ static bool modularityOptimisation(Graph* g){
 
 static int readFile(char *filename, Graph *g){
 	if(!g){
-		printf("Le graphe doit être alloue avant de lire le fichier\n");
+		printf("Le graphe doit etre alloue avant de lire le fichier\n");
 		return -1;
 	}
 	FILE *fp;
@@ -589,7 +590,7 @@ static int readFile(char *filename, Graph *g){
 						i++;
 					//If no numbers, then delete
 					if ((line[i]>'9' || line[i]<'0') && line[i]!='x'){
-						printf("Erreur a la line %d !\n",nbLine);
+						printf("Erreur a la ligne %d !\n",nbLine);
 						deleteGraph(g);
 						return -1;
 					}
@@ -617,7 +618,7 @@ static int readFile(char *filename, Graph *g){
 					addEdge(g,member,nbEdge,weight);
 			}
 			if (nbEdge != nbS1){
-				printf("Erreur a la line %d !\n",nbLine);
+				printf("Erreur a la ligne %d !\n",nbLine);
 				deleteGraph(g);
 				return -1;
 			}
@@ -632,7 +633,6 @@ int main(int argc, char *argv[]){
 	int error;
 	unsigned int nbPass;
 	char deleteFilename[MAX_NAME], filename[MAX_NAME];
-	size_t prevNbCom;
 
 	//Verifying the number of arguments given in the command line
 	if(argc != 3){
@@ -666,8 +666,9 @@ int main(int argc, char *argv[]){
 		return -1;
 	}
 
-	//Deleting all previously created trace files in the folder 'Pass'
+	//Deleting all previously created files in the folder 'Pass'
 	nbPass = 1;
+	remove("./Pass/finalGraph.txt");
 	sprintf(deleteFilename, "./Pass/pass%u.txt", nbPass);
 	while(remove(deleteFilename) != -1){
 		nbPass++;
@@ -681,8 +682,6 @@ int main(int argc, char *argv[]){
 	nbPass=0;
 	hasChanged = true;
 	while(hasChanged){
-		prevNbCom = g->nbCommunity;
-
 		//Applying modularity optimisation
 		hasChanged = modularityOptimisation(g);
 
@@ -702,6 +701,7 @@ int main(int argc, char *argv[]){
 		}
 
 	}
+	makeTrace(g,"./Pass/finalGraph.txt");
 	printf("\n Nombre de <pass> effectues: %u\n",nbPass);
 	deleteGraph(g);
    return 0;

@@ -12,7 +12,7 @@ OBJECTS_GRAPH=optimisation.o aggregation.o
 
 all: $(EXEC)
 
-graph: $(OBJECTS_GRAPH)
+graphes: $(OBJECTS_GRAPH)
 	$(LD) -o $@ $^ $(LDFLAGS)
 
 optimisation.o: optimisation.c optimisation.h
@@ -20,7 +20,6 @@ optimisation.o: optimisation.c optimisation.h
 
 aggregation.o: aggregation.c aggregation.h
 	$(CC) -c aggregation.c -o aggregation.o $(CFLAGS)
-
 
 clean:
 	rm -f *.o

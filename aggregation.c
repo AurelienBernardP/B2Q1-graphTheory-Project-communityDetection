@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#include "optimisation.h"
 #include "aggregation.h"
 
 typedef struct{

@@ -4,7 +4,7 @@ CFLAGS=--std=c99 --pedantic -Wall -W -Wmissing-prototypes -Wextra
 LDFLAGS=--std=c99 --pedantic -Wall -W -Wmissing-prototypes -Wextra
 # files 
 
-EXEC=graph
+EXEC=graphes
 MODULES_GRAPH=optimisation.c aggregation.c
 OBJECTS_GRAPH=optimisation.o aggregation.o
 

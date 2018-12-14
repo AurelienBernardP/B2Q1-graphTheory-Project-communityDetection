@@ -152,7 +152,7 @@ static double** makeAdjacencyMatrix(Graph* g){
         }
     }
 
-    //Allocating a vector to keep in order in which the adcency matrix should be completed (more details on the report)
+    //Allocating a vector to keep in order in which the adcency matrix should be completed
     size_t* index = malloc(g->nbMembers *  sizeof(size_t));
     if(!index){
         printf("Erreur lors de l'allocation memoire pour la fonction makeAdjacencyMatrix\n");
@@ -182,16 +182,14 @@ static double** makeAdjacencyMatrix(Graph* g){
         //Browing all members of the community
         member = community->member;
         while(member != NULL){
-
-            //Browsing all neighbours of the member
-            Edge *neighbours = member->neighbours;
-
             //Searching for the row of the adjacency matrix which corresponds to the community
             row = 0;
             while(member->label != index[row])
                 row++;
-            while(neighbours != NULL){
 
+            //Browsing all neighbours of the member
+            Edge *neighbours = member->neighbours;
+            while(neighbours != NULL){
                 //Searching for the column of the adjacency matrix which corresponds to the community
                 column = 0;
                 while(neighbours->dest->label != index[column])

@@ -9,7 +9,7 @@ typedef struct{
 }LinksToCommunity;
 
 /* bubbleSort
-* Sort the array $array$ which size is $size$
+* Sort the array $array$ of size $size$
 *
 * [input]
 * array : an initialised array
@@ -19,7 +19,7 @@ typedef struct{
 static void bubbleSort(size_t *array, size_t size);
 
 /* deleteMatrix
-* Delete a 2-dimensional matrix of size ($size$ x $>=size$)
+* Delete a 2-dimensional matrix of size ($size$ x $size$)
 *
 * [input]
 * matrix: an initialised matrix
@@ -56,30 +56,17 @@ static double** makeAdjacencyMatrix(Graph* g);
 */
 static int printGraphWithCommunities(Graph* g, double** AdjacencyMatrix, char* filename);
 
-/* makeTrace
-* Saving the graph $g$ in the file $filename$
-*
-* [input]
-* g : an initialised graph
-* filename : the path to a non-existent file
-*
-* [return]
-* 0 : The graph has been successfully saved in a file
-* -1 : Error at applying the operation
-*
-*/
-static int makeTrace(Graph* g, char* filename);
-
 /* findIndex
-* Saving the graph $g$ in the file $filename$
+* Finding the index of the label of the element of the array $communityConnection$ which 
+* corresponds to $communityLabel$
 *
 * [input]
 * g : an initialised graph
-* filename : the path to a non-existent file
+* communityLabel : the label of a community inside g
+* communityConnections : an array of type $LinksToCommunity$
 *
 * [return]
-* 0 : The graph has been successfully saved in a file
-* -1 : Error at applying the operation
+* i : index of the element of $communityConnections$ which labels corresponds to $communityLabel$
 *
 */
 static size_t findIndex(Graph* g, size_t communityLabel, LinksToCommunity* communityConnections);
@@ -138,6 +125,7 @@ static double** makeAdjacencyMatrix(Graph* g){
     size_t i, row, column;
     Community* community;
     Member* member;
+
     //Allocating of the adjacent matrix of graph g of size $g->nbMembers$x$g->nbMembers+1$
     double** adjMat = malloc(g->nbMembers * sizeof(double*) );
     if(!adjMat){
@@ -159,7 +147,6 @@ static double** makeAdjacencyMatrix(Graph* g){
         deleteMatrix(adjMat, g->nbMembers);
         return NULL;
     }   
-
     //Adding all community labels in a vector $index$
     i=0;
     community =  g->community;
@@ -238,7 +225,7 @@ static int printGraphWithCommunities(Graph* g, double** AdjacencyMatrix, char* f
     return 0;
 }
 
-static int makeTrace(Graph* g, char* filename){
+int makeTrace(Graph* g, char* filename){
     if(!g || !filename){
         printf("Le graphe ou le fichier n'existe pas. (makeTrace) \n");
         return -1;

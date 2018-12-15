@@ -106,6 +106,33 @@ static double gainModularity(Graph* g, Member* member, Community* com);
 */
 static double power(double x, int y);
 
+/* findWeight
+* Finding the weight of the edges from $memberOrigin$ to $memberDest$
+*
+* [input]
+* memberOrigin : an initialised member
+* memberDest : an initialised member
+*
+* [return]
+*	0 : no links between the members
+* weight: the weight of the link from $memberOrigin$ to $memberDest$
+*
+*/
+static double findWeight(Member *memberOrigin, Member *memberDest);
+
+/* modularityGraph
+* Calculate the modularity of the graph
+*
+* [input]
+* g : an initialised graph
+*
+* [return]
+* [-1;1] : the modularity of the graph
+*
+*/
+static double modularityGraph(Graph* g);
+
+
 /* modularityOptimisation
 * Applying a local modularity optimisation.
 *
@@ -458,6 +485,7 @@ static double gainModularity(Graph* g, Member* member, Community* com){
    double weightTot;
    double comWeightInt, comWeightExt;
    double memberWeight, memberWeightCom;
+
 	//sum of the weight of the links inside the community $com$
 	comWeightInt = com->weightInt;
 	
@@ -485,19 +513,68 @@ static double gainModularity(Graph* g, Member* member, Community* com){
    return (t3 - s3);
 }
 
+static double findWeight(Member *memberOrigin, Member *memberDest){
+	Edge* pNeighbours;
+	double weight;
+	weight = 0;
+	pNeighbours = memberOrigin->neighbours;
+
+	//Searching for the weight of the link from $memberOrigin$ to $memberDest$
+	while(pNeighbours != NULL){
+		if(pNeighbours->dest->label == memberDest->label)
+			weight = pNeighbours->weight;
+		pNeighbours = pNeighbours->next;
+	}
+	return weight;
+}
+
+static double modularityGraph(Graph* g){
+	double m, modularity;
+	Community* pCom;
+	Member* pMember, *pMember2;
+
+	m = g->weightTot;
+	//Browsing all communities
+	pCom = g->community;
+	while(pCom != NULL){
+		//Browsing all members of the community
+		pMember = pCom->member;
+		while(pMember != NULL){
+			//Browsing all members for each member of the community
+			pMember2 = pCom->member;
+			while(pMember2 != NULL){
+				modularity += findWeight(pMember,pMember2)-((pMember->weightMember * pMember2->weightMember)/m);
+				pMember2 = pMember2->next;
+			}
+			pMember = pMember->next;
+		}
+		pCom = pCom->next;
+	}
+	modularity = modularity / m;
+
+	return modularity;
+}
+
 static bool modularityOptimisation(Graph* g){
 	if(!g)
 		return false;
+	double graphQ, newGraphQ;
 	Community *pCom, *pComNext,*pNewCom;
 	Member *pMember, *pMemberNext;
 	Edge *pNeighbours;
 	bool has_imp, has_changed;
 	double maxQ, q;
+	size_t j;
 
 	has_changed = false;
+	j = 1;
+
+	//Calculating the modularity of the graph
+	graphQ = modularityGraph(g);
+
 	//Browsing each community
 	pCom = g->community;
-	for(size_t i=1; i <= g->nbCommunity; i++){
+	for(size_t i=1; i <= g->nbCommunity && j <= g->nbMembers; i++){
 		if(!pCom)
 			pCom = g->community;
 		maxQ = 0.0;
@@ -510,7 +587,6 @@ static bool modularityOptimisation(Graph* g){
 			//Browsing each neightours of the member
 			pNeighbours = pMember->neighbours;
 			while(pNeighbours != NULL){
-
 				//Calculating the gain modularity if the member $pMember$ was in its neighbours' community
 				q = gainModularity(g, pMember, pNeighbours->dest->myCom);
 				if (maxQ < q) {
@@ -521,14 +597,24 @@ static bool modularityOptimisation(Graph* g){
 				pNeighbours = pNeighbours->next;
 			}
 
-			//(pMember might be in other community or pCom might be deleted)
+			//(pMember might be in another community or pCom might be deleted)
 			//Keeping the order of the browsing
 			pMemberNext = pMember->next;
 			pComNext = pCom->next;
+
+			//Changing the member to another community if a gain is positif
 			if(has_imp && pMember->myCom->label != pNewCom->label){
 				has_changed = true;
 				changeMemberToCommunity(g, pMember, pNewCom);
-				i = 0;//If a member has changed of community, then we have to recheck all communities
+
+				//Verify if the modularity of the graph augmented after the change
+				newGraphQ = modularityGraph(g);				
+				if (graphQ < newGraphQ){
+					graphQ = newGraphQ;
+					i = 0;//If a member has changed of community, then we have to recheck all communities
+					j = 0;//If the modularity of the graph augmented, then we have to recheck all communities
+				}else
+					j++;
 			}
 			pMember = pMemberNext;
 		}

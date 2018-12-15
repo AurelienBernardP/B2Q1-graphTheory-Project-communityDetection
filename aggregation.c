@@ -212,7 +212,7 @@ static int printGraphWithCommunities(Graph* g, double** AdjacencyMatrix, char* f
     fprintf(fp,"# nombre de membres = %lu\n",g->nbMembers);
     fprintf(fp,"# nombre d'arcs = %lu\n",g->nbEdge);
     fprintf(fp,"# poids de tous les arcs = %lf\n",g->weightTot);
-    fprintf(fp,"# Matrice d'adjacence | le membre de la communaute\n");
+    fprintf(fp,"# Matrice d'adjacence | la communaute\n");
 
     //Writing the Adjacency matrix in the file
     for(size_t l=0; l<g->nbMembers; l++){
